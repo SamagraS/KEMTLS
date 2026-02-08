@@ -11,13 +11,33 @@ Functions:
     - create_jwk_from_dilithium_pubkey: Create JWK from Dilithium public key
     - extract_pubkey_from_jwk: Extract public key from JWK
 """
-
+import sys
 import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import time
 import string
 import secrets
 from typing import Optional, Dict, Any
-from .encoding import base64url_encode, base64url_decode
+# Fix relative import for direct execution
+try:
+    from src.utils.encoding import base64url_encode, base64url_decode
+except ImportError:
+    # Fallback if run from different location
+    try:
+        from utils.encoding import base64url_encode, base64url_decode
+    except ImportError:
+        # Ultimate fallback - inline functions
+        import base64
+        
+        def base64url_encode(data: bytes) -> str:
+            encoded = base64.urlsafe_b64encode(data)
+            return encoded.rstrip(b'=').decode('ascii')
+        
+        def base64url_decode(encoded: str) -> bytes:
+            encoded_bytes = encoded.encode('ascii')
+            padding_needed = (4 - len(encoded_bytes) % 4) % 4
+            encoded_bytes += b'=' * padding_needed
+            return base64.urlsafe_b64decode(encoded_bytes)
 
 
 def generate_random_string(length: int = 32, charset: str = None) -> str:
