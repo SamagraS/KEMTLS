@@ -33,4 +33,8 @@ sphinx-rtd-theme==2.0.0
 # Benchmarking
 matplotlib==3.8.2
 numpy==1.26.2
+<<<<<<< HEAD
 pandas==2.1.4
+=======
+pandas==2.1.4
+>>>>>>> b7b5c0f571dac3ea10aa2bda592eb073009a311d

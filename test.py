@@ -21,4 +21,8 @@ import mypy
 import sphinx
 
 print("All imports successful.")
+<<<<<<< HEAD
 print("Environment is correctly set up.")
+=======
+print("Environment is correctly set up.")
+>>>>>>> b7b5c0f571dac3ea10aa2bda592eb073009a311d
