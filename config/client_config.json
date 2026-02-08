@@ -1,0 +1,7 @@
+{
+  "auth_server_url": "http://localhost:5000",
+  "resource_server_url": "http://localhost:5001",
+  "client_id": "demo-client",
+  "redirect_uri": "http://localhost:8080/callback",
+  "scope": "openid profile email"
+}

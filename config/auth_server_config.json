@@ -1,0 +1,8 @@
+{
+  "host": "localhost",
+  "port": 5000,
+  "issuer": "https://auth.example.com",
+  "session_timeout": 600,
+  "token_lifetime": 3600,
+  "allowed_scopes": ["openid", "profile", "email"]
+}

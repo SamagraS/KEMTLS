@@ -1,0 +1,6 @@
+{
+  "host": "localhost",
+  "port": 5001,
+  "issuer_public_key_path": "keys/auth_server_signing.pub",
+  "pop_challenge_timeout": 300
+}
