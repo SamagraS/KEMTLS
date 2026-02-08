@@ -1,3 +1,8 @@
+# Repository Structure: pq-oidc-kemtls
+
+Below is the complete project tree with brief descriptions retained exactly as provided.
+
+```
 pq-oidc-kemtls/
 ├── README.md
 ├── requirements.txt
@@ -90,3 +95,4 @@ pq-oidc-kemtls/
     ├── run_client.py
     ├── run_benchmarks.py
     └── generate_keys.py
+```
