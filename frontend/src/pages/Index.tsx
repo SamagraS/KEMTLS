@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Shield, Lock, Key, FileKey, User, Server, 
   Play, RotateCcw, ChevronRight, Zap, CheckCircle2,
-  ArrowRight, Fingerprint
+  ArrowRight, Fingerprint, Wifi, WifiOff
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TerminalWindow } from "@/components/TerminalWindow";
@@ -14,32 +14,32 @@ import { JWTDisplay } from "@/components/JWTDisplay";
 import { BenchmarkCard } from "@/components/BenchmarkCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ArchitectureDiagram } from "@/components/ArchitectureDiagram";
+import { useDemoWebSocket } from "@/hooks/useDemoWebSocket";
 
 type Phase = 0 | 1 | 2 | 3 | 4;
 
 const Index = () => {
-  const [activePhase, setActivePhase] = useState<Phase>(0);
-  const [isRunning, setIsRunning] = useState(false);
-  const [completedPhases, setCompletedPhases] = useState<number[]>([]);
+  const { 
+    isConnected, 
+    isRunning, 
+    activePhase, 
+    completedPhases, 
+    logs, 
+    startDemo,
+    resetDemo,
+    error,
+    benchmarkResults,
+    benchmarksLoading
+  } = useDemoWebSocket();
 
-  const runDemo = async () => {
-    setIsRunning(true);
-    setCompletedPhases([]);
-    
-    for (let i = 1; i <= 4; i++) {
-      setActivePhase(i as Phase);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setCompletedPhases(prev => [...prev, i]);
+  const logsContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom of logs container when new logs arrive
+  useEffect(() => {
+    if (logsContainerRef.current) {
+      logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
     }
-    
-    setIsRunning(false);
-  };
-
-  const resetDemo = () => {
-    setActivePhase(0);
-    setCompletedPhases([]);
-    setIsRunning(false);
-  };
+  }, [logs]);
 
   // Mock data for demo
   const mockKeys = {
@@ -90,12 +90,13 @@ const Index = () => {
               
               <div className="flex items-center gap-3">
                 <StatusBadge 
-                  status={isRunning ? "pending" : completedPhases.length === 4 ? "success" : "info"} 
-                  text={isRunning ? "Running..." : completedPhases.length === 4 ? "Complete" : "Ready"} 
+                  status={!isConnected ? "error" : isRunning ? "pending" : completedPhases.length === 4 ? "success" : "info"} 
+                  text={!isConnected ? "Disconnected" : isRunning ? "Running..." : completedPhases.length === 4 ? "Complete" : "Ready"} 
+                  icon={isConnected ? Wifi : WifiOff}
                 />
                 <Button
-                  onClick={isRunning ? undefined : runDemo}
-                  disabled={isRunning}
+                  onClick={startDemo}
+                  disabled={isRunning || !isConnected}
                   className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
                 >
                   <Play className="w-4 h-4" />
@@ -242,19 +243,53 @@ const Index = () => {
             </div>
           </section>
 
-          {/* Detailed View */}
-          <AnimatePresence mode="wait">
-            {activePhase > 0 && (
-              <motion.section
-                key={activePhase}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-              >
-                <PhaseDetailView phase={activePhase} mockKeys={mockKeys} mockJWT={mockJWT} />
-              </motion.section>
-            )}
-          </AnimatePresence>
+          {/* Live Demo Logs */}
+          {(isRunning || logs.length > 0) && (
+            <motion.section
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-8"
+            >
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <FileKey className="w-5 h-5 text-primary" />
+                Live Demo Output
+              </h3>
+              <TerminalWindow title="demo_full_flow.log">
+                <div ref={logsContainerRef} className="space-y-1 max-h-96 overflow-y-auto font-mono text-xs">
+                  {logs.map((log, idx) => (
+                    <div 
+                      key={idx}
+                      className={`
+                        ${log.level === 'success' ? 'text-success' : ''}
+                        ${log.level === 'error' ? 'text-destructive' : ''}
+                        ${log.level === 'warning' ? 'text-warning' : ''}
+                        ${log.level === 'info' ? 'text-muted-foreground' : ''}
+                      `}
+                    >
+                      {log.message}
+                    </div>
+                  ))}
+                  {isRunning && (
+                    <div className="text-primary animate-pulse">
+                      ▋ Running...
+                    </div>
+                  )}
+                </div>
+              </TerminalWindow>
+            </motion.section>
+          )}
+
+          {/* Error Display - Only show when there's an actual error */}
+          {error && error.trim() !== '' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-4 p-4 rounded-lg border border-destructive/30 bg-destructive/10"
+            >
+              <p className="text-destructive font-semibold">Error:</p>
+              <p className="text-sm text-muted-foreground mt-1">{error}</p>
+            </motion.div>
+          )}
 
           {/* Performance Benchmarks */}
           <section>
@@ -265,33 +300,39 @@ const Index = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <BenchmarkCard
                 operation="KEMTLS Handshake"
-                time="~1.5 ms"
+                time={benchmarkResults ? `~${benchmarkResults.kemtls_handshake.toFixed(2)} ms` : undefined}
                 comparison={{ label: "PQ-TLS", improvement: "-98.8%" }}
+                loading={benchmarksLoading}
               />
               <BenchmarkCard
                 operation="ID Token Creation"
-                time="~0.55 ms"
-                size="~7.5 KB"
+                time={benchmarkResults ? `~${benchmarkResults.token_creation.toFixed(2)} ms` : undefined}
                 comparison={{ label: "PQ-TLS", improvement: "-93.8%" }}
+                loading={benchmarksLoading}
               />
               <BenchmarkCard
                 operation="Token Verification"
-                time="~0.20 ms"
+                time={benchmarkResults ? `~${benchmarkResults.token_verification.toFixed(2)} ms` : undefined}
                 comparison={{ label: "PQ-TLS", improvement: "-96.0%" }}
+                loading={benchmarksLoading}
               />
               <BenchmarkCard
                 operation="PoP Proof Creation"
-                time="~0.50 ms"
-                size="~4.4 KB"
+                time={benchmarkResults ? `~${benchmarkResults.pop_proof_creation.toFixed(2)} ms` : undefined}
+                comparison={{ label: "PQ-TLS", improvement: "-95.2%" }}
+                loading={benchmarksLoading}
               />
               <BenchmarkCard
                 operation="PoP Verification"
-                time="~0.15 ms"
+                time={benchmarkResults ? `~${benchmarkResults.pop_verification.toFixed(2)} ms` : undefined}
+                comparison={{ label: "PQ-TLS", improvement: "-97.1%" }}
+                loading={benchmarksLoading}
               />
               <BenchmarkCard
                 operation="End-to-End Flow"
-                time="~3.0 ms"
+                time={benchmarkResults ? `~${benchmarkResults.end_to_end.toFixed(2)} ms` : undefined}
                 comparison={{ label: "PQ-TLS", improvement: "-98.5%" }}
+                loading={benchmarksLoading}
               />
             </div>
           </section>
@@ -321,7 +362,7 @@ const Index = () => {
                   <p className="text-muted-foreground">NIST Level 3</p>
                   <div className="pt-2 border-t border-accent/20 text-xs space-y-1">
                     <p><span className="text-secondary">pk:</span> 1952 bytes</p>
-                    <p><span className="text-secondary">sk:</span> 4000 bytes</p>
+                    <p><span className="text-secondary">sk:</span> 4032 bytes</p>
                     <p><span className="text-secondary">sig:</span> 3293 bytes</p>
                   </div>
                 </div>

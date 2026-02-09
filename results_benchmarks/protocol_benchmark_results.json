@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "timestamp": "2026-02-09 03:35:03",
-    "iterations": 100,
+    "timestamp": "2026-02-09 10:03:38",
+    "iterations": 50,
     "type": "protocol-level"
   },
   "kemtls": {
@@ -10,13 +10,13 @@
     "operations": {
       "full_handshake": {
         "operation": "KEMTLS Full Handshake",
-        "iterations": 100,
-        "avg_ms": 0.56,
-        "min_ms": 0.422,
-        "max_ms": 2.383,
-        "median_ms": 0.474,
-        "p95_ms": 0.863,
-        "p99_ms": 2.383
+        "iterations": 50,
+        "avg_ms": 0.53,
+        "min_ms": 0.423,
+        "max_ms": 2.063,
+        "median_ms": 0.471,
+        "p95_ms": 0.859,
+        "p99_ms": 2.063
       }
     }
   },
@@ -26,23 +26,23 @@
     "operations": {
       "create_token": {
         "operation": "ID Token Creation",
-        "iterations": 100,
-        "avg_ms": 0.495,
-        "min_ms": 0.236,
-        "max_ms": 1.249,
-        "median_ms": 0.39,
-        "p95_ms": 1.054,
-        "p99_ms": 1.249
+        "iterations": 50,
+        "avg_ms": 0.509,
+        "min_ms": 0.235,
+        "max_ms": 2.048,
+        "median_ms": 0.418,
+        "p95_ms": 1.01,
+        "p99_ms": 2.048
       },
       "verify_token": {
         "operation": "ID Token Verification",
-        "iterations": 100,
-        "avg_ms": 0.139,
-        "min_ms": 0.124,
-        "max_ms": 0.378,
+        "iterations": 50,
+        "avg_ms": 0.136,
+        "min_ms": 0.125,
+        "max_ms": 0.327,
         "median_ms": 0.133,
-        "p95_ms": 0.188,
-        "p99_ms": 0.378
+        "p95_ms": 0.15,
+        "p99_ms": 0.327
       }
     }
   },
@@ -52,23 +52,23 @@
     "operations": {
       "generate_proof": {
         "operation": "PoP Proof Generation",
-        "iterations": 100,
-        "avg_ms": 0.511,
+        "iterations": 50,
+        "avg_ms": 0.513,
         "min_ms": 0.237,
-        "max_ms": 1.346,
-        "median_ms": 0.42,
-        "p95_ms": 1.06,
-        "p99_ms": 1.346
+        "max_ms": 1.657,
+        "median_ms": 0.495,
+        "p95_ms": 1.065,
+        "p99_ms": 1.657
       },
       "verify_proof": {
         "operation": "PoP Proof Verification",
-        "iterations": 100,
-        "avg_ms": 0.002,
+        "iterations": 50,
+        "avg_ms": 0.004,
         "min_ms": 0.0,
-        "max_ms": 0.196,
+        "max_ms": 0.199,
         "median_ms": 0.0,
-        "p95_ms": 0.0,
-        "p99_ms": 0.196
+        "p95_ms": 0.002,
+        "p99_ms": 0.199
       }
     }
   }
