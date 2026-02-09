@@ -123,11 +123,8 @@ The system runs **4 separate servers** that communicate in real-time:
 4. **Frontend Dev Server** (Port 5173)
    - React application with Vite
    - Socket.io-client connection
-   - Real-time UI updates            AUTHORIZATION SERVER                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐    │
-│  │  KEMTLS      │  │  OIDC        │  │  JWT Issuance    │    │
-│  │  Server    Complete Demo
-
+   - Real-time UI updates            
+   
 The demo requires **4 terminals** running simultaneously:
 
 #### Terminal 1: Authorization Server
@@ -165,6 +162,7 @@ npm run dev
 1. **Open your browser** to `http://localhost:5173/`
 
 2. **Check connection status*      # Cryptographic primitives
+```
 │   │   ├── kyber_kem.py           # Kyber768 KEM operations
 │   │   ├── dilithium_sig.py       # ML-DSA-65/Dilithium3 signatures
 │   │   ├── aead.py                # ChaCha20-Poly1305 AEAD
@@ -236,7 +234,7 @@ npm run dev
 │   ├── end_to_end_benchmark_results.json
 │   └── crypto_benchmark_results.json
 └── requirements.txt               # Python dependencie
-
+```
 ## Quick Start
 
 ### Prerequisites
