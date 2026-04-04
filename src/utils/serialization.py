@@ -3,50 +3,87 @@ Message Serialization
 
 This module provides JSON-based serialization for protocol messages.
 All messages are serialized to JSON for transmission over the KEMTLS channel.
+Canonical encoding is enforced for deterministic output (required for signing/hashing).
+Binary-safe handling of 'bytes' is provided by automatic Base64url encoding.
 
 Usage:
     >>> from utils.serialization import serialize_message, deserialize_message
     >>> 
-    >>> message = {'type': 'ServerHello', 'session_id': 'abc123'}
+    >>> message = {'type': 'ServerHello', 'public_key': b'\\x01\\x02\\x03'}
     >>> serialized = serialize_message(message)
     >>> recovered = deserialize_message(serialized)
-    >>> assert recovered == message
+    >>> assert recovered['public_key'] == 'AQID'  # base64url-encoded
+
+Tests:
+    Run "pytest tests/test_serialization.py" to run the tests.
 """
 
 import json
 from typing import Any, Dict
+from .encoding import base64url_encode
+
+__all__ = ["serialize_message", "deserialize_message", "CanonicalJSONEncoder"]
+
+
+class CanonicalJSONEncoder(json.JSONEncoder):
+    """
+    Strict JSON encoder for canonical, binary-safe serialization.
+    - Automatically encodes 'bytes' using Base64url.
+    - Enforces deterministic output (sorted keys, no whitespace).
+    - Disallows invalid JSON values (NaN, Infinity).
+    """
+    
+    def __init__(self, *args, **kwargs):
+        # Override with canonical defaults
+        kwargs['sort_keys'] = True
+        kwargs['separators'] = (',', ':')
+        kwargs['allow_nan'] = False
+        super().__init__(*args, **kwargs)
+
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, bytes):
+            return base64url_encode(obj)
+        # Fallback to standard encoder (will raise TypeError for other non-serializable types)
+        return super().default(obj)
 
 
 def serialize_message(message: Dict[str, Any]) -> bytes:
     """
-    Serialize a message dictionary to JSON bytes.
+    Serialize a message dictionary to deterministic JSON bytes.
     
     Args:
-        message (dict): Message to serialize
+        message (dict): Message to serialize (can contain bytes)
     
     Returns:
-        bytes: JSON-encoded message
+        bytes: Canonical JSON-encoded message (UTF-8)
+    
+    Raises:
+        ValueError: If serialization fails (e.g., contains NaN/Inf or unknown types)
+        TypeError: If message is not a dictionary
     
     Example:
-        >>> msg = {'type': 'test', 'data': 'hello'}
-        >>> serialized = serialize_message(msg)
-        >>> isinstance(serialized, bytes)
-        True
+        >>> msg = {'key': b'\\x00'}
+        >>> serialize_message(msg)
+        b'{"key":"AA"}'
     """
     if not isinstance(message, dict):
         raise TypeError("Message must be a dictionary")
     
     try:
-        # Convert to JSON with sorted keys for deterministic serialization
-        json_str = json.dumps(message, sort_keys=True, separators=(',', ':'))
+        # Use our canonical encoder
+        json_str = json.dumps(message, cls=CanonicalJSONEncoder)
         return json_str.encode('utf-8')
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         raise ValueError(f"Failed to serialize message: {e}")
 
 
 def deserialize_message(data: bytes) -> Dict[str, Any]:
     """
     Deserialize JSON bytes to a message dictionary.
+    
+    Notes:
+        Binary data will remain as base64url-encoded strings. 
+        It is the caller's responsibility to decode them back to bytes.
     
     Args:
         data (bytes): JSON-encoded message
@@ -56,12 +93,7 @@ def deserialize_message(data: bytes) -> Dict[str, Any]:
     
     Raises:
         ValueError: If data is not valid JSON
-    
-    Example:
-        >>> data = b'{"type":"test","data":"hello"}'
-        >>> msg = deserialize_message(data)
-        >>> msg['type']
-        'test'
+        TypeError: If data is not bytes
     """
     if not isinstance(data, bytes):
         raise TypeError("Data must be bytes")
@@ -71,43 +103,5 @@ def deserialize_message(data: bytes) -> Dict[str, Any]:
         return json.loads(json_str)
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON data: {e}")
-    except Exception as e:
+    except (ValueError, UnicodeDecodeError) as e:
         raise ValueError(f"Failed to deserialize message: {e}")
-
-
-def test_serialization():
-    """Test message serialization."""
-    print("Testing message serialization...")
-    
-    # Test cases
-    test_messages = [
-        {'type': 'ServerHello', 'session_id': 'abc123'},
-        {'type': 'ClientKeyExchange', 'data': [1, 2, 3]},
-        {'nested': {'key': 'value', 'number': 42}},
-        {},
-        {'unicode': '你好世界'},
-    ]
-    
-    for msg in test_messages:
-        # Serialize
-        serialized = serialize_message(msg)
-        assert isinstance(serialized, bytes)
-        
-        # Deserialize
-        recovered = deserialize_message(serialized)
-        assert recovered == msg
-        
-        print(f"  ✓ {str(msg)[:60]}{'...' if len(str(msg)) > 60 else ''}")
-    
-    # Test deterministic serialization
-    msg = {'z': 3, 'a': 1, 'b': 2}
-    s1 = serialize_message(msg)
-    s2 = serialize_message(msg)
-    assert s1 == s2
-    print("  ✓ Deterministic serialization")
-    
-    print("\n✅ Message serialization test passed!")
-
-
-if __name__ == "__main__":
-    test_serialization()

@@ -17,9 +17,19 @@ Usage:
     >>> encoded = base64url_encode(data)
     >>> decoded = base64url_decode(encoded)
     >>> assert decoded == data
+
+Tests:
+    Run "pytest tests/test_encoding.py" to run the tests.
 """
 
 import base64
+import binascii
+import re
+
+__all__ = ["base64url_encode", "base64url_decode"]
+
+# Matches only valid Base64url characters (RFC 4648 §5)
+_BASE64URL_PATTERN = re.compile(r'^[A-Za-z0-9_-]*$')
 
 
 def base64url_encode(data: bytes) -> str:
@@ -37,19 +47,20 @@ def base64url_encode(data: bytes) -> str:
     Returns:
         str: Base64url-encoded string
     
+    Raises:
+        TypeError: If data is not bytes
+    
     Example:
         >>> base64url_encode(b"Hello")
         'SGVsbG8'
-        >>> base64url_encode(b"\x00\x01\x02")
+        >>> base64url_encode(b"\\x00\\x01\\x02")
         'AAEC'
     """
     if not isinstance(data, bytes):
         raise TypeError("Data must be bytes")
     
-    # Standard Base64 encoding
+    # Standard Base64url encoding, strip padding
     encoded = base64.urlsafe_b64encode(data)
-    
-    # Remove padding
     return encoded.rstrip(b'=').decode('ascii')
 
 
@@ -58,10 +69,9 @@ def base64url_decode(encoded: str) -> bytes:
     Decode Base64url string to bytes.
     
     Performs the reverse of base64url_encode:
-    1. Add padding if needed
-    2. Replace '-' with '+'
-    3. Replace '_' with '/'
-    4. Decode using standard Base64
+    1. Validate input contains only Base64url characters
+    2. Add padding if needed
+    3. Decode using URL-safe Base64
     
     Args:
         encoded (str): Base64url-encoded string
@@ -70,7 +80,8 @@ def base64url_decode(encoded: str) -> bytes:
         bytes: Decoded binary data
     
     Raises:
-        ValueError: If encoded string is invalid
+        TypeError: If encoded is not a string
+        ValueError: If encoded string contains invalid characters or is malformed
     
     Example:
         >>> base64url_decode('SGVsbG8')
@@ -79,48 +90,21 @@ def base64url_decode(encoded: str) -> bytes:
         b'\\x00\\x01\\x02'
     """
     if not isinstance(encoded, str):
-        raise TypeError("Encoded data must be string")
+        raise TypeError("Encoded data must be a string")
     
-    # Convert to bytes if needed
-    if isinstance(encoded, str):
-        encoded = encoded.encode('ascii')
+    # Validate characters before attempting decode
+    if not _BASE64URL_PATTERN.match(encoded):
+        raise ValueError(
+            "Invalid Base64url string: contains characters outside [A-Za-z0-9_-]"
+        )
     
-    # Add padding
-    padding_needed = (4 - len(encoded) % 4) % 4
-    encoded += b'=' * padding_needed
+    # Convert to bytes and add padding
+    encoded_bytes = encoded.encode('ascii')
+    padding_needed = (4 - len(encoded_bytes) % 4) % 4
+    encoded_bytes += b'=' * padding_needed
     
     # Decode
     try:
-        return base64.urlsafe_b64decode(encoded)
-    except Exception as e:
+        return base64.urlsafe_b64decode(encoded_bytes)
+    except binascii.Error as e:
         raise ValueError(f"Invalid Base64url encoding: {e}")
-
-
-def test_encoding():
-    """Test Base64url encoding/decoding."""
-    print("Testing Base64url encoding...")
-    
-    # Test basic encoding/decoding
-    test_cases = [
-        b"Hello, World!",
-        b"",
-        b"\x00\x01\x02\x03\x04",
-        b"A" * 100,
-        b"The quick brown fox jumps over the lazy dog",
-    ]
-    
-    for data in test_cases:
-        encoded = base64url_encode(data)
-        decoded = base64url_decode(encoded)
-        assert decoded == data, f"Mismatch for {data}"
-        # Verify no padding or unsafe characters
-        assert '=' not in encoded
-        assert '+' not in encoded
-        assert '/' not in encoded
-        print(f"  ✓ {len(data)} bytes: {encoded[:50]}{'...' if len(encoded) > 50 else ''}")
-    
-    print("\n✅ Base64url encoding test passed!")
-
-
-if __name__ == "__main__":
-    test_encoding()
