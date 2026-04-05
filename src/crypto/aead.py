@@ -2,9 +2,37 @@
 
 from __future__ import annotations
 
+import os
+
 KEY_SIZE = 32
 NONCE_SIZE = 12
 TAG_SIZE = 16
+
+
+class AEADCipher:
+    """Compatibility wrapper around the functional AEAD helpers."""
+
+    def __init__(self, key: bytes):
+        _validate_bytes("key", key, KEY_SIZE)
+        self._key = key
+
+    @staticmethod
+    def generate_key() -> bytes:
+        return os.urandom(KEY_SIZE)
+
+    def encrypt(self, plaintext: bytes, aad: bytes = b"") -> bytes:
+        nonce = os.urandom(NONCE_SIZE)
+        ciphertext = seal(self._key, nonce, plaintext, aad)
+        return nonce + ciphertext
+
+    def decrypt(self, ciphertext: bytes, aad: bytes = b"") -> bytes:
+        _validate_bytes("ciphertext", ciphertext)
+        if len(ciphertext) < NONCE_SIZE + TAG_SIZE:
+            raise ValueError("ciphertext is too short to contain a nonce and tag")
+
+        nonce = ciphertext[:NONCE_SIZE]
+        payload = ciphertext[NONCE_SIZE:]
+        return open_(self._key, nonce, payload, aad)
 
 
 def seal(key: bytes, nonce: bytes, plaintext: bytes, aad: bytes) -> bytes:
@@ -69,4 +97,12 @@ def _load_chacha20_poly1305():
     return ChaCha20Poly1305
 
 
-__all__ = ["KEY_SIZE", "NONCE_SIZE", "TAG_SIZE", "open_", "seal", "xor_iv_with_seq"]
+__all__ = [
+    "AEADCipher",
+    "KEY_SIZE",
+    "NONCE_SIZE",
+    "TAG_SIZE",
+    "open_",
+    "seal",
+    "xor_iv_with_seq",
+]

@@ -36,7 +36,12 @@ class MockAEAD:
         return data
 
 def install_mocks(sys):
-    sys.modules["src.crypto.kyber_kem"] = SimpleNamespace(KyberKEM=MockKyberKEM)
-    sys.modules["src.crypto.dilithium_sig"] = SimpleNamespace(DilithiumSignature=MockDilithium)
-    sys.modules["src.crypto.kdf"] = SimpleNamespace(KeyDerivation=MockKDF)
+    sys.modules["crypto.ml_kem"] = SimpleNamespace(KyberKEM=MockKyberKEM)
+    sys.modules["crypto.ml_dsa"] = SimpleNamespace(DilithiumSignature=MockDilithium)
+    sys.modules["crypto.key_schedule"] = SimpleNamespace(KeyDerivation=MockKDF)
+    sys.modules["crypto.aead"] = SimpleNamespace(AEADCipher=MockAEAD)
+
+    sys.modules["src.crypto.ml_kem"] = SimpleNamespace(KyberKEM=MockKyberKEM)
+    sys.modules["src.crypto.ml_dsa"] = SimpleNamespace(DilithiumSignature=MockDilithium)
+    sys.modules["src.crypto.key_schedule"] = SimpleNamespace(KeyDerivation=MockKDF)
     sys.modules["src.crypto.aead"] = SimpleNamespace(AEADCipher=MockAEAD)

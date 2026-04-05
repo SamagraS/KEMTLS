@@ -8,7 +8,7 @@ Implements proof-of-possession binding by embedding client public keys in tokens
 import json
 import time
 from typing import Dict, Any, Optional
-from crypto.dilithium_sig import DilithiumSignature
+from crypto.ml_dsa import DilithiumSignature
 from utils.encoding import base64url_encode, base64url_decode
 from utils.helpers import create_jwk_from_dilithium_pubkey, extract_pubkey_from_jwk, get_timestamp
 

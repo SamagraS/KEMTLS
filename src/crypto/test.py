@@ -148,12 +148,12 @@ def run_sandbox() -> None:
 
     print("[sandbox] loading crypto modules")
     aead = _load_module("crypto.aead", os.path.join(CURRENT_DIR, "aead.py"))
-    kdf = _load_module("crypto.kdf", os.path.join(CURRENT_DIR, "kdf.py"))
+    kdf = _load_module("crypto.key_schedule", os.path.join(CURRENT_DIR, "key_schedule.py"))
     dilithium_sig = _load_module(
-        "crypto.dilithium_sig", os.path.join(CURRENT_DIR, "dilithium_sig.py")
+        "crypto.ml_dsa", os.path.join(CURRENT_DIR, "ml_dsa.py")
     )
     kyber_kem = _load_module(
-        "crypto.kyber_kem", os.path.join(CURRENT_DIR, "kyber_kem.py")
+        "crypto.ml_kem", os.path.join(CURRENT_DIR, "ml_kem.py")
     )
 
     print("[aead] generate_key / encrypt / decrypt")

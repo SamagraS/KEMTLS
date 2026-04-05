@@ -6,12 +6,15 @@ from importlib import import_module
 
 
 _LAZY_EXPORTS = {
+    "AEADCipher": ("crypto.aead", "AEADCipher"),
     "HASH_LEN": ("crypto.key_schedule", "HASH_LEN"),
     "KEY_SIZE": ("crypto.aead", "KEY_SIZE"),
     "MLDSA65": ("crypto.ml_dsa", "MLDSA65"),
     "MLKEM768": ("crypto.ml_kem", "MLKEM768"),
+    "KeyDerivation": ("crypto.key_schedule", "KeyDerivation"),
     "NONCE_SIZE": ("crypto.aead", "NONCE_SIZE"),
     "TAG_SIZE": ("crypto.aead", "TAG_SIZE"),
+    "DilithiumSignature": ("crypto.ml_dsa", "DilithiumSignature"),
     "compute_transcript_hash": ("crypto.key_schedule", "compute_transcript_hash"),
     "derive_application_traffic_secrets": (
         "crypto.key_schedule",
@@ -25,6 +28,7 @@ _LAZY_EXPORTS = {
     ),
     "hkdf_expand_label": ("crypto.key_schedule", "hkdf_expand_label"),
     "hkdf_extract": ("crypto.key_schedule", "hkdf_extract"),
+    "KyberKEM": ("crypto.ml_kem", "KyberKEM"),
     "open_": ("crypto.aead", "open_"),
     "seal": ("crypto.aead", "seal"),
     "xor_iv_with_seq": ("crypto.aead", "xor_iv_with_seq"),

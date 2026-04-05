@@ -3,7 +3,7 @@ Server-Side PoP Verification
 """
 
 import hashlib
-from crypto.dilithium_sig import DilithiumSignature
+from crypto.ml_dsa import DilithiumSignature
 from utils.helpers import generate_random_string, get_timestamp
 from utils.encoding import base64url_decode
 from utils.serialization import serialize_message

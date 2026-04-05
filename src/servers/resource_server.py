@@ -48,7 +48,7 @@ class ResourceServer:
 
 if __name__ == '__main__':
     # Would load issuer public key from config
-    from crypto.dilithium_sig import DilithiumSignature
+    from crypto.ml_dsa import DilithiumSignature
     sig = DilithiumSignature()
     pk, sk = sig.generate_keypair()
     

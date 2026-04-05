@@ -24,7 +24,7 @@ if SRC_DIR not in sys.path:
 from oidc.authorization import AuthorizationEndpoint
 from oidc.token import TokenEndpoint
 from oidc.jwt_handler import PQJWT
-from crypto.dilithium_sig import DilithiumSignature
+from crypto.ml_dsa import DilithiumSignature
 from utils.helpers import get_timestamp
 
 

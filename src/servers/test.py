@@ -34,29 +34,29 @@ def _load_module(module_name: str, file_path: str) -> types.ModuleType:
 
 
 def _install_fake_dependencies() -> None:
-    # crypto.kyber_kem
+    # crypto.ml_kem
     crypto_pkg = types.ModuleType("crypto")
     crypto_pkg.__path__ = [os.path.join(SRC_DIR, "crypto")]
     sys.modules["crypto"] = crypto_pkg
 
-    kyber_kem = types.ModuleType("crypto.kyber_kem")
+    kyber_kem = types.ModuleType("crypto.ml_kem")
 
     class KyberKEM:
         def generate_keypair(self):
             return b"pk", b"sk"
 
     kyber_kem.KyberKEM = KyberKEM
-    sys.modules["crypto.kyber_kem"] = kyber_kem
+    sys.modules["crypto.ml_kem"] = kyber_kem
 
-    # crypto.dilithium_sig
-    dilithium_sig = types.ModuleType("crypto.dilithium_sig")
+    # crypto.ml_dsa
+    dilithium_sig = types.ModuleType("crypto.ml_dsa")
 
     class DilithiumSignature:
         def generate_keypair(self):
             return b"issuer_pk", b"issuer_sk"
 
     dilithium_sig.DilithiumSignature = DilithiumSignature
-    sys.modules["crypto.dilithium_sig"] = dilithium_sig
+    sys.modules["crypto.ml_dsa"] = dilithium_sig
 
     # kemtls.session
     kemtls_pkg = types.ModuleType("kemtls")

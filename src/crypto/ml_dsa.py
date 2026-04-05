@@ -127,4 +127,8 @@ class MLDSA65:
             )
 
 
-__all__ = ["MLDSA65"]
+class DilithiumSignature(MLDSA65):
+    """Backward-compatible alias for the renamed ML-DSA implementation."""
+
+
+__all__ = ["DilithiumSignature", "MLDSA65"]

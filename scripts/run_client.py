@@ -21,8 +21,8 @@ SRC_DIR = os.path.join(ROOT_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from crypto.kyber_kem import KyberKEM
-from crypto.dilithium_sig import DilithiumSignature
+from crypto.ml_kem import KyberKEM
+from crypto.ml_dsa import DilithiumSignature
 from kemtls.handshake import KEMTLSHandshake
 from client.oidc_client import OIDCClient
 from pop.client import PoPClient

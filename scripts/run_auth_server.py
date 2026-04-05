@@ -77,8 +77,8 @@ def main():
     # Generate keys if requested and missing
     if args.generate_keys and (kyber_pk is None or dilithium_pk is None):
         print("\n   Generating missing keys...")
-        from crypto.kyber_kem import KyberKEM
-        from crypto.dilithium_sig import DilithiumSignature
+        from crypto.ml_kem import KyberKEM
+        from crypto.ml_dsa import DilithiumSignature
         
         if not os.path.exists(keys_dir):
             os.makedirs(keys_dir)

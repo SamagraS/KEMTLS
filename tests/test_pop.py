@@ -8,7 +8,7 @@ if SRC_DIR not in sys.path:
 
 from pop.client import PoPClient
 from pop.server import ProofOfPossession
-from crypto.dilithium_sig import DilithiumSignature
+from crypto.ml_dsa import DilithiumSignature
 
 # Generate real Dilithium keypair
 sig = DilithiumSignature()

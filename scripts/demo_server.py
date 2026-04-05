@@ -207,8 +207,8 @@ def run_demo_with_events(emitter: EventEmitter):
         start_time = time.time()
         
         # Import demo functions
-        from crypto.kyber_kem import KyberKEM
-        from crypto.dilithium_sig import DilithiumSignature
+        from crypto.ml_kem import KyberKEM
+        from crypto.ml_dsa import DilithiumSignature
         from kemtls.handshake import KEMTLSHandshake
         from client.oidc_client import OIDCClient
         from oidc.jwt_handler import PQJWT

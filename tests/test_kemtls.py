@@ -7,7 +7,7 @@ if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
 from kemtls.session import KEMTLSSession
-from crypto.kyber_kem import KyberKEM
+from crypto.ml_kem import KyberKEM
 
 # Generate real keypairs
 kem = KyberKEM()

@@ -5,8 +5,8 @@ Complete OIDC authorization server with KEMTLS support.
 """
 
 from flask import Flask, request, jsonify
-from crypto.kyber_kem import KyberKEM
-from crypto.dilithium_sig import DilithiumSignature
+from crypto.ml_kem import KyberKEM
+from crypto.ml_dsa import DilithiumSignature
 from kemtls.session import KEMTLSSession
 from oidc.authorization import AuthorizationEndpoint
 from oidc.token import TokenEndpoint

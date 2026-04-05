@@ -90,4 +90,8 @@ class MLKEM768:
             )
 
 
-__all__ = ["MLKEM768"]
+class KyberKEM(MLKEM768):
+    """Backward-compatible alias for the renamed ML-KEM implementation."""
+
+
+__all__ = ["KyberKEM", "MLKEM768"]

@@ -143,7 +143,7 @@ def create_jwk_from_dilithium_pubkey(
         dict: JWK representation
     
     Example:
-        >>> from crypto.dilithium_sig import DilithiumSignature
+        >>> from crypto.ml_dsa import DilithiumSignature
         >>> sig = DilithiumSignature()
         >>> pk, sk = sig.generate_keypair()
         >>> jwk = create_jwk_from_dilithium_pubkey(pk, "client-key-1")
@@ -177,7 +177,7 @@ def extract_pubkey_from_jwk(jwk: Dict[str, str]) -> bytes:
         ValueError: If JWK is invalid or missing required fields
     
     Example:
-        >>> from crypto.dilithium_sig import DilithiumSignature
+        >>> from crypto.ml_dsa import DilithiumSignature
         >>> sig = DilithiumSignature()
         >>> pk, sk = sig.generate_keypair()
         >>> jwk = create_jwk_from_dilithium_pubkey(pk)
@@ -291,7 +291,7 @@ def test_helpers():
     
     # Test JWK creation/extraction
     print("  Testing JWK creation...")
-    from crypto.dilithium_sig import DilithiumSignature
+    from crypto.ml_dsa import DilithiumSignature
     sig = DilithiumSignature()
     pk, sk = sig.generate_keypair()
     

@@ -142,8 +142,41 @@ def _hkdf_expand(prk: bytes, info: bytes, length: int) -> bytes:
     return bytes(output[:length])
 
 
+class KeyDerivation:
+    """Backward-compatible facade over the renamed key schedule helpers."""
+
+    @staticmethod
+    def derive_session_keys(shared_secrets: Sequence[bytes], transcript_hash: bytes) -> Dict[str, bytes]:
+        handshake_secret = derive_handshake_secret(shared_secrets)
+        handshake_traffic = derive_handshake_traffic_secrets(handshake_secret, transcript_hash)
+        finished_keys = derive_finished_keys(
+            handshake_traffic["client_handshake_traffic_secret"],
+            handshake_traffic["server_handshake_traffic_secret"],
+        )
+        application_traffic = derive_application_traffic_secrets(handshake_secret, transcript_hash)
+
+        return {
+            "client_write_key": application_traffic["client_application_traffic_secret"],
+            "server_write_key": application_traffic["server_application_traffic_secret"],
+            "session_key": hkdf_expand_label(handshake_secret, b"session", transcript_hash, HASH_LEN),
+            "pop_key": hkdf_expand_label(handshake_secret, b"pop", transcript_hash, HASH_LEN),
+            **handshake_traffic,
+            **finished_keys,
+            **application_traffic,
+        }
+
+    @staticmethod
+    def derive_single_key(secret: bytes, context: bytes) -> bytes:
+        return hkdf_expand_label(secret, b"single", context, HASH_LEN)
+
+    @staticmethod
+    def compute_transcript_hash(messages: Sequence[bytes]) -> bytes:
+        return compute_transcript_hash(messages)
+
+
 __all__ = [
     "HASH_LEN",
+    "KeyDerivation",
     "compute_transcript_hash",
     "derive_application_traffic_secrets",
     "derive_finished_keys",

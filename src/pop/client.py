@@ -3,7 +3,7 @@ Client-Side Proof-of-Possession
 """
 
 import hashlib
-from crypto.dilithium_sig import DilithiumSignature
+from crypto.ml_dsa import DilithiumSignature
 from utils.encoding import base64url_encode
 from utils.serialization import serialize_message
 

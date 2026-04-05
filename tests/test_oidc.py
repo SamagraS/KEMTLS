@@ -26,7 +26,7 @@ from oidc.token import TokenEndpoint
 from oidc.jwt_handler import PQJWT
 from utils.encoding import base64url_decode
 from utils.helpers import get_timestamp
-from crypto.dilithium_sig import DilithiumSignature
+from crypto.ml_dsa import DilithiumSignature
 
 
 class TestAuthorizationCodeFlow(unittest.TestCase):
