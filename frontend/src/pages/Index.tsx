@@ -1,519 +1,1208 @@
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Shield, Lock, Key, FileKey, User, Server, 
-  Play, RotateCcw, ChevronRight, Zap, CheckCircle2,
-  ArrowRight, Fingerprint, Wifi, WifiOff
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { TerminalWindow } from "@/components/TerminalWindow";
-import { PhaseCard } from "@/components/PhaseCard";
-import { KeyDisplay } from "@/components/KeyDisplay";
-import { DataPacket } from "@/components/DataPacket";
-import { JWTDisplay } from "@/components/JWTDisplay";
-import { BenchmarkCard } from "@/components/BenchmarkCard";
-import { StatusBadge } from "@/components/StatusBadge";
-import { ArchitectureDiagram } from "@/components/ArchitectureDiagram";
-import { useDemoWebSocket } from "@/hooks/useDemoWebSocket";
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { CyberCursor } from '../components/CyberCursor';
+import { GridBackground } from '../components/GridBackground';
+import { useThreatPopups, THREATS } from '../components/ThreatPopup';
+import { ProtocolActivity } from '../components/ProtocolActivity';
 
-type Phase = 0 | 1 | 2 | 3 | 4;
+/* ──────────────────────────────────────────
+   Types
+   ────────────────────────────────────────── */
+interface FlowStep {
+  id: string;
+  label: string;
+  detail: string;
+  explanation: string;
+  status: 'idle' | 'running' | 'done' | 'error';
+  data?: Record<string, string>;
+  durationMs?: number;
+}
 
-const Index = () => {
-  const { 
-    isConnected, 
-    isRunning, 
-    activePhase, 
-    completedPhases, 
-    logs, 
-    startDemo,
-    resetDemo,
-    error,
-    benchmarkResults,
-    benchmarksLoading
-  } = useDemoWebSocket();
+interface LogEntry {
+  ts: number;
+  level: 'info' | 'ok' | 'warn' | 'err' | 'data';
+  msg: string;
+}
 
-  const logsContainerRef = useRef<HTMLDivElement>(null);
+type FlowState = 'idle' | 'running' | 'paused' | 'done';
+type RunMode = 'full' | 'step';
 
-  // Auto-scroll to bottom of logs container when new logs arrive
+/* ──────────────────────────────────────────
+   Step definitions with explanations for click-and-resume
+   ────────────────────────────────────────── */
+const INITIAL_STEPS: FlowStep[] = [
+  {
+    id: 'hello', label: 'CLIENT HELLO',
+    detail: 'ML-KEM-768 key share + PKCE code_verifier',
+    explanation: 'The client generates an ML-KEM-768 key pair and sends the public key to the server. It also creates a PKCE code_verifier for later OIDC use. This uses lattice-based cryptography that is resistant to quantum attacks via Shor\'s algorithm.',
+    status: 'idle',
+  },
+  {
+    id: 'server', label: 'SERVER HELLO',
+    detail: 'ML-KEM-768 ciphertext + ML-DSA-65 cert chain',
+    explanation: 'The server encapsulates a shared secret using the client\'s ML-KEM public key and sends the ciphertext back alongside its ML-DSA-65 signed certificate chain. The post-quantum signature prevents certificate forgery even by quantum adversaries.',
+    status: 'idle',
+  },
+  {
+    id: 'derive', label: 'KEY SCHEDULE',
+    detail: 'HKDF-SHA256 → client_key, server_key, exporter',
+    explanation: 'Both parties derive symmetric keys using HKDF-SHA256 from the shared KEM secret, bound to the full handshake transcript. This transcript binding means any MITM modification is detectable — the derived keys will differ.',
+    status: 'idle',
+  },
+  {
+    id: 'finished', label: 'FINISHED',
+    detail: 'Handshake MAC verified on both sides',
+    explanation: 'Both sides exchange Finished messages containing HMAC over the handshake transcript. Fresh nonces ensure uniqueness — replaying a captured handshake will fail MAC verification because the nonce won\'t match.',
+    status: 'idle',
+  },
+  {
+    id: 'auth', label: 'OIDC AUTHORIZE',
+    detail: 'GET /authorize?response_type=code&scope=openid',
+    explanation: 'The client initiates the OpenID Connect authorization code flow over the now quantum-secure KEMTLS channel. PKCE (S256) prevents authorization code interception. The entire request is protected by post-quantum encryption.',
+    status: 'idle',
+  },
+  {
+    id: 'token', label: 'TOKEN EXCHANGE',
+    detail: 'POST /token → PQ-signed ID + Access + Refresh',
+    explanation: 'The client exchanges the authorization code for tokens. The auth server signs all tokens with ML-DSA-65, a post-quantum digital signature algorithm. The PKCE verifier ensures only the legitimate client can complete this exchange.',
+    status: 'idle',
+  },
+  {
+    id: 'bind', label: 'SESSION BINDING',
+    detail: 'cnf.kbh = SHA256(tls-exporter || session_id)',
+    explanation: 'The token is cryptographically bound to this specific TLS channel using the TLS Exporter. Even if tokens are stolen, they cannot be used from a different connection because the binding hash won\'t match.',
+    status: 'idle',
+  },
+  {
+    id: 'access', label: 'RESOURCE ACCESS',
+    detail: 'GET /userinfo + PoP proof → 200 OK',
+    explanation: 'The client accesses protected resources by presenting the bound access token with a Proof-of-Possession signature (ML-DSA-65). The resource server verifies both the token signature and the PoP proof, confirming sender identity.',
+    status: 'idle',
+  },
+];
+
+const PLACEHOLDER_LOGS: LogEntry[] = [];
+
+function makePlaceholderData(stepId: string): Record<string, string> {
+  const data: Record<string, Record<string, string>> = {
+    hello: { kem_pk_size: '1184 bytes', cipher_suite: 'ML-KEM-768 + ML-DSA-65', pkce: 'S256' },
+    server: { ct_size: '1088 bytes', cert_alg: 'ML-DSA-65', cert_chain: '2 certs' },
+    derive: { client_key: 'a1b2...f0e9 (32B)', server_key: 'c3d4...78ab (32B)', exporter: 'ZjRhY2Mx...OGM (32B)' },
+    finished: { handshake_mac: 'HMAC-SHA256 ✓', replay_nonce: '0x7a3f...e1c0', latency: '2.1 ms' },
+    auth: { redirect_uri: 'http://localhost:3000/cb', state: 'rng_state_439f', code: 'a8f3k2x9m1b7...' },
+    token: { alg: 'ML-DSA-65', id_token_size: '7.8 KB', sig_size: '3293 bytes', refresh_bound: 'true' },
+    bind: { session_id: 'kemtls-001', binding_hash: 'ZjRhY2MxODM...', exporter_label: 'kemtls-session-v1' },
+    access: { resource: '/api/userinfo', pop_alg: 'ML-DSA-65', result: '200 OK – Access Granted' },
+  };
+  return data[stepId] || {};
+}
+
+/* Phase groupings for vertical flow layout */
+const PHASES = [
+  { label: 'KEMTLS HANDSHAKE', color: 'var(--cyan)', stepIds: ['hello', 'server', 'derive', 'finished'] },
+  { label: 'OIDC PROTOCOL', color: 'var(--magenta)', stepIds: ['auth', 'token'] },
+  { label: 'SESSION BIND', color: 'var(--violet)', stepIds: ['bind'] },
+  { label: 'RESOURCE', color: 'var(--lime)', stepIds: ['access'] },
+];
+
+/* ──────────────────────────────────────────
+   Component
+   ────────────────────────────────────────── */
+export default function Index() {
+  const [runMode, setRunMode] = useState<RunMode>('full');
+  const [flowState, setFlowState] = useState<FlowState>('idle');
+  const [steps, setSteps] = useState<FlowStep[]>(INITIAL_STEPS);
+  const [logs, setLogs] = useState<LogEntry[]>(PLACEHOLDER_LOGS);
+  const [elapsed, setElapsed] = useState(0);
+  const [selectedStep, setSelectedStep] = useState<string | null>(null);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalWidth, setTerminalWidth] = useState(380);
+  const [waitingForClick, setWaitingForClick] = useState(false);
+  const [currentStepIdx, setCurrentStepIdx] = useState(-1);
+  const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const logBoxRef = useRef<HTMLDivElement>(null);
+  const resumeRef = useRef<(() => void) | null>(null);
+  const isDraggingRef = useRef(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const { activeThreat, triggerThreat, dismissThreat } = useThreatPopups();
+
+  // Scroll logs to bottom
   useEffect(() => {
-    if (logsContainerRef.current) {
-      logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
-    }
+    if (logBoxRef.current) logBoxRef.current.scrollTop = logBoxRef.current.scrollHeight;
   }, [logs]);
 
-  // Mock data for demo
-  const mockKeys = {
-    serverKyberPk: "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA7Fk...",
-    clientDilithiumPk: "MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIB...",
-    sessionKey: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
-  };
+  // Timer for elapsed
+  useEffect(() => {
+    if (flowState === 'running') {
+      timerRef.current = setInterval(() => setElapsed(e => e + 100), 100);
+    } else {
+      clearInterval(timerRef.current);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [flowState]);
 
-  const mockJWT = {
-    header: { alg: "DILITHIUM3", typ: "JWT", kid: "server-signing-key" },
-    payload: {
-      iss: "https://auth.kemtls.demo",
-      sub: "alice@example.com",
-      aud: "client-app-id",
-      iat: Date.now(),
-      exp: Date.now() + 3600000,
-      cnf: {
-        jwk: { kty: "LWE", alg: "DILITHIUM3", use: "sig" },
-        session_id: "kemtls-session-001",
-        session_exp: Date.now() + 600000
+  const addLog = useCallback((level: LogEntry['level'], msg: string) => {
+    setLogs(prev => [...prev, { ts: Date.now(), level, msg }]);
+  }, []);
+
+  /* ────── Terminal resize drag handler ────── */
+  const handleTerminalDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    const startX = e.clientX;
+    const startW = terminalWidth;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const delta = startX - ev.clientX;
+      const newW = Math.max(260, Math.min(window.innerWidth * 0.7, startW + delta));
+      setTerminalWidth(newW);
+    };
+
+    const onUp = () => {
+      isDraggingRef.current = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [terminalWidth]);
+
+  /* ────── Run Full Flow (auto, no attacks) ────── */
+  const runFullFlow = useCallback(async () => {
+    if (flowState === 'running') return;
+    setFlowState('running');
+    setElapsed(0);
+    setLogs([]);
+    setSelectedStep(null);
+    setCurrentStepIdx(-1);
+    setSteps(INITIAL_STEPS.map(s => ({ ...s, status: 'idle', data: undefined, durationMs: undefined })));
+
+    addLog('info', '▸ Initializing KEMTLS handshake flow...');
+    addLog('info', `  Mode: FULL AUTO`);
+
+    for (let i = 0; i < INITIAL_STEPS.length; i++) {
+      const step = INITIAL_STEPS[i];
+      setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'running' } : s));
+      setSelectedStep(step.id);
+      setCurrentStepIdx(i);
+      addLog('data', `[${step.label}] → ${step.detail}`);
+
+      const dur = 400 + Math.random() * 800;
+      await new Promise(r => setTimeout(r, dur));
+
+      const data = makePlaceholderData(step.id);
+      setSteps(prev => prev.map((s, idx) =>
+        idx === i ? { ...s, status: 'done', data, durationMs: Math.round(dur) } : s
+      ));
+      addLog('ok', `[${step.label}] ✓ Complete (${Math.round(dur)}ms)`);
+      for (const [k, v] of Object.entries(data)) {
+        addLog('data', `    ${k}: ${v}`);
       }
-    },
-    signature: "QmFzZTY0RW5jb2RlZERpbGl0aGl1bTNTaWduYXR1cmVIZXJlV2l0aFZlcnlMb25nQnl0ZXNBcHByb3hpbWF0ZWx5MzI5M0J5dGVz"
-  };
+    }
+
+    addLog('ok', '');
+    addLog('ok', '═══════════════════════════════════════');
+    addLog('ok', '  ✓ FULL PQ-OIDC FLOW COMPLETE');
+    addLog('ok', '═══════════════════════════════════════');
+    setFlowState('done');
+  }, [flowState, addLog]);
+
+  /* ────── Run Step-by-Step (with attacks, pauses) ────── */
+  const runStepFlow = useCallback(async () => {
+    if (flowState === 'running' || flowState === 'paused') return;
+    setFlowState('running');
+    setElapsed(0);
+    setLogs([]);
+    setSelectedStep(null);
+    setCurrentStepIdx(-1);
+    setWaitingForClick(false);
+    setSteps(INITIAL_STEPS.map(s => ({ ...s, status: 'idle', data: undefined, durationMs: undefined })));
+
+    addLog('info', '▸ Initializing step-by-step flow...');
+    addLog('info', '  Click each step node to proceed');
+
+    for (let i = 0; i < INITIAL_STEPS.length; i++) {
+      const step = INITIAL_STEPS[i];
+      setCurrentStepIdx(i);
+      setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'running' } : s));
+      setSelectedStep(step.id);
+      addLog('data', `[${step.label}] → ${step.detail}`);
+
+      // Trigger threat popup
+      triggerThreat(step.id);
+
+      // Simulate processing
+      const dur = 600 + Math.random() * 600;
+      await new Promise(r => setTimeout(r, dur));
+
+      const data = makePlaceholderData(step.id);
+      setSteps(prev => prev.map((s, idx) =>
+        idx === i ? { ...s, status: 'done', data, durationMs: Math.round(dur) } : s
+      ));
+      addLog('ok', `[${step.label}] ✓ Complete (${Math.round(dur)}ms)`);
+      for (const [k, v] of Object.entries(data)) {
+        addLog('data', `    ${k}: ${v}`);
+      }
+
+      // Pause and wait for user to click next step (unless last step)
+      if (i < INITIAL_STEPS.length - 1) {
+        setFlowState('paused');
+        setWaitingForClick(true);
+        addLog('info', `  ⏸ Paused — click step ${i + 2} to continue`);
+        await new Promise<void>(resolve => {
+          resumeRef.current = resolve;
+        });
+        setWaitingForClick(false);
+        setFlowState('running');
+      }
+    }
+
+    addLog('ok', '');
+    addLog('ok', '═══════════════════════════════════════');
+    addLog('ok', '  ✓ FULL PQ-OIDC FLOW COMPLETE');
+    addLog('ok', '═══════════════════════════════════════');
+    setFlowState('done');
+  }, [flowState, addLog, triggerThreat]);
+
+  /* ────── Handle node click (for step mode resume) ────── */
+  const handleNodeClick = useCallback((stepId: string) => {
+    if (runMode === 'step' && waitingForClick) {
+      const nextIdx = currentStepIdx + 1;
+      if (nextIdx < INITIAL_STEPS.length && INITIAL_STEPS[nextIdx].id === stepId) {
+        resumeRef.current?.();
+        resumeRef.current = null;
+      }
+    }
+    setSelectedStep(stepId);
+  }, [runMode, waitingForClick, currentStepIdx]);
+
+  const startFlow = useCallback(() => {
+    if (runMode === 'full') {
+      runFullFlow();
+    } else {
+      runStepFlow();
+    }
+  }, [runMode, runFullFlow, runStepFlow]);
+
+  const resetFlow = useCallback(() => {
+    resumeRef.current?.();
+    resumeRef.current = null;
+    setFlowState('idle');
+    setSteps(INITIAL_STEPS);
+    setLogs([]);
+    setElapsed(0);
+    setSelectedStep(null);
+    setCurrentStepIdx(-1);
+    setWaitingForClick(false);
+  }, []);
+
+  // Active step for explanation panel
+  const activeStepObj = steps.find(s => s.id === (selectedStep || ''));
+  const activeThreatInfo = selectedStep ? THREATS.find(t => t.stepId === selectedStep) : null;
 
   return (
-    <div className="min-h-screen bg-background grid-pattern relative overflow-hidden">
-      {/* Background effects */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
-      </div>
+    <div className="fixed inset-0 flex flex-col overflow-hidden" style={{ background: 'var(--void)' }}>
+      <CyberCursor />
+      <GridBackground />
 
-      <div className="relative z-10">
-        {/* Hero Header */}
-        <header className="border-b border-primary/20 backdrop-cyber">
-          <div className="container mx-auto px-4 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center">
-                  <Shield className="w-5 h-5 text-primary" />
+
+      {/* ═══ TOP BAR ═══ */}
+      <header className="relative z-20 h-14 flex items-center px-5 gap-4" style={{
+        background: 'linear-gradient(90deg, rgba(0,229,255,0.04), transparent 40%, transparent 60%, rgba(255,0,229,0.04))',
+        borderBottom: '1px solid rgba(0, 229, 255, 0.1)',
+      }}>
+        {/* Logo */}
+        <div className="flex items-center gap-3 mr-4" data-hover>
+          <div className="relative w-9 h-9">
+            <div className="absolute inset-0 rounded-lg" style={{
+              border: '1.5px solid var(--cyan)',
+              boxShadow: 'var(--glow-cyan)',
+              animation: 'hex-rotate 8s linear infinite',
+            }} />
+            <div className="absolute inset-0 flex items-center justify-center font-display text-sm font-bold neon-text">H</div>
+          </div>
+          <div>
+            <div className="font-display text-sm font-bold neon-text tracking-widest">HelloWorld</div>
+            <div className="text-[10px] tracking-[0.3em]" style={{ color: 'var(--text-dim)' }}>PQ-OIDC DASHBOARD</div>
+          </div>
+        </div>
+
+        {/* Run Mode Toggle */}
+        <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid rgba(0,229,255,0.15)' }}>
+          {([
+            { key: 'full' as const, label: 'FULL FLOW' },
+            { key: 'step' as const, label: 'STEP BY STEP' },
+          ]).map(m => (
+            <button
+              key={m.key}
+              onClick={() => { if (flowState === 'idle') setRunMode(m.key); }}
+              data-hover
+              className="px-4 py-1.5 text-xs font-display font-semibold tracking-wider transition-all duration-200"
+              style={{
+                background: runMode === m.key ? 'rgba(0,229,255,0.15)' : 'transparent',
+                color: runMode === m.key ? 'var(--cyan)' : 'var(--text-mid)',
+                borderRight: '1px solid rgba(0,229,255,0.1)',
+                textShadow: runMode === m.key ? '0 0 8px rgba(0,229,255,0.5)' : 'none',
+                opacity: flowState !== 'idle' && runMode !== m.key ? 0.3 : 1,
+              }}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-2 ml-4">
+          <button
+            onClick={startFlow}
+            disabled={flowState === 'running' || flowState === 'paused'}
+            data-hover
+            className="px-5 py-1.5 font-display font-bold text-xs tracking-wider rounded-lg transition-all duration-300"
+            style={{
+              background: flowState === 'running' || flowState === 'paused'
+                ? 'rgba(255,171,0,0.1)'
+                : 'linear-gradient(135deg, rgba(0,229,255,0.2), rgba(255,0,229,0.15))',
+              border: `1px solid ${flowState === 'running' || flowState === 'paused' ? 'var(--amber)' : 'var(--cyan)'}`,
+              color: flowState === 'running' || flowState === 'paused' ? 'var(--amber)' : 'var(--cyan)',
+              boxShadow: flowState === 'running' || flowState === 'paused' ? 'var(--glow-amber)' : 'var(--glow-cyan)',
+              opacity: flowState === 'running' || flowState === 'paused' ? 0.6 : 1,
+            }}
+          >
+            {flowState === 'running' ? '◉ RUNNING...' : flowState === 'paused' ? '⏸ PAUSED' : flowState === 'done' ? '▶ RUN AGAIN' : '▶ START'}
+          </button>
+          <button
+            onClick={resetFlow}
+            data-hover
+            className="px-3 py-1.5 font-display font-semibold text-xs tracking-wider rounded-lg transition-all duration-200"
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(0,229,255,0.15)',
+              color: 'var(--text-mid)',
+            }}
+          >
+            ↺
+          </button>
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Status */}
+        <div className="flex items-center gap-3 text-xs font-code">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full" style={{
+              background: flowState === 'running' ? 'var(--amber)' : flowState === 'paused' ? 'var(--magenta)' : flowState === 'done' ? 'var(--lime)' : 'var(--cyan)',
+              boxShadow: flowState === 'running' ? 'var(--glow-amber)' : flowState === 'paused' ? 'var(--glow-magenta)' : flowState === 'done' ? 'var(--glow-lime)' : 'var(--glow-cyan)',
+              animation: flowState === 'running' ? 'pulse-glow 1s ease infinite' : flowState === 'paused' ? 'pulse-glow 2s ease infinite' : 'none',
+            }} />
+            <span style={{ color: 'var(--text-mid)' }}>
+              {flowState === 'idle' ? 'READY' : flowState === 'running' ? 'RUNNING' : flowState === 'paused' ? 'PAUSED' : 'COMPLETE'}
+            </span>
+          </div>
+          <span style={{ color: 'var(--text-dim)' }}>|</span>
+          <span style={{ color: 'var(--text-mid)' }}>{(elapsed / 1000).toFixed(1)}s</span>
+        </div>
+
+        {/* Terminal toggle */}
+        <button
+          onClick={() => setTerminalOpen(!terminalOpen)}
+          data-hover
+          className="ml-3 px-3 py-1.5 text-xs font-display font-semibold tracking-wider rounded-lg transition-all duration-200"
+          style={{
+            background: terminalOpen ? 'rgba(0,229,255,0.1)' : 'transparent',
+            border: `1px solid ${terminalOpen ? 'var(--cyan)' : 'rgba(0,229,255,0.15)'}`,
+            color: terminalOpen ? 'var(--cyan)' : 'var(--text-dim)',
+          }}
+        >
+          {terminalOpen ? '✕ TERMINAL' : '⟩_ TERMINAL'}
+        </button>
+      </header>
+
+      {/* ═══ MAIN CONTENT ═══ */}
+      <div className="flex-1 flex overflow-hidden relative z-10">
+        {/* ─── CENTER: Vertical Flow + Protocol Activity (inline) ─── */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Scrollable flow area */}
+          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden">
+            <VerticalFlowVisualizer
+              steps={steps}
+              selectedStep={selectedStep}
+              flowState={flowState}
+              runMode={runMode}
+              waitingForClick={waitingForClick}
+              currentStepIdx={currentStepIdx}
+              onNodeClick={handleNodeClick}
+              activeThreat={activeThreat}
+              onDismissThreat={dismissThreat}
+              scrollContainerRef={scrollContainerRef}
+            />
+          </div>
+
+          {/* Protocol Activity — now inline at the bottom, adjusts with panels */}
+          <ProtocolActivity currentStepId={selectedStep} flowState={flowState === 'paused' ? 'running' : flowState} />
+        </div>
+
+        {/* ─── RIGHT: Step Explanation (in step mode when step selected & done) ─── */}
+        {runMode === 'step' && activeStepObj && activeStepObj.status === 'done' && flowState === 'paused' && (
+          <div className="w-[380px] flex-shrink-0 flex flex-col overflow-y-auto" style={{
+            borderLeft: '1px solid rgba(0,229,255,0.08)',
+            background: 'rgba(6, 13, 31, 0.85)',
+            animation: 'slideInRight 0.3s ease',
+          }}>
+            <StepExplanation step={activeStepObj} threat={activeThreatInfo || undefined} />
+          </div>
+        )}
+
+        {/* ─── RIGHT: Resizable Terminal ─── */}
+        {terminalOpen && (
+          <div
+            className="flex-shrink-0 flex flex-col overflow-hidden relative"
+            style={{
+              width: `${terminalWidth}px`,
+              borderLeft: '1px solid rgba(0,229,255,0.08)',
+              background: 'rgba(2, 6, 20, 0.92)',
+            }}
+          >
+            {/* Drag handle — left edge */}
+            <div
+              onMouseDown={handleTerminalDragStart}
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: '6px',
+                cursor: 'col-resize',
+                zIndex: 10,
+                background: 'transparent',
+              }}
+              onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(0,229,255,0.15)'; }}
+              onMouseLeave={(e) => { if (!isDraggingRef.current) (e.target as HTMLElement).style.background = 'transparent'; }}
+            />
+
+            <div className="px-4 py-3 flex items-center gap-2 flex-shrink-0" style={{ borderBottom: '1px solid rgba(0,229,255,0.06)' }}>
+              <div className="w-2 h-2 rounded-full" style={{ background: 'var(--lime)', boxShadow: '0 0 6px var(--lime)' }} />
+              <span className="text-[10px] font-display tracking-[0.3em]" style={{ color: 'var(--text-dim)' }}>
+                TERMINAL OUTPUT
+              </span>
+              <div className="flex-1" />
+              <span className="text-[9px] font-code" style={{ color: 'var(--text-dim)', opacity: 0.5 }}>
+                ← drag to resize
+              </span>
+            </div>
+            <div ref={logBoxRef} className="flex-1 overflow-y-auto p-3 font-code leading-relaxed" style={{ fontSize: Math.max(12, Math.min(24, terminalWidth / 26)) + 'px' }}>
+              {logs.length === 0 && (
+                <div style={{ color: 'var(--text-dim)' }}>
+                  <span className="neon-text">{'>'}</span> Waiting for flow execution...
+                  <span className="inline-block w-2 h-4 ml-1" style={{
+                    background: 'var(--cyan)',
+                    animation: 'pulse-glow 1s ease infinite',
+                  }} />
                 </div>
-                <div>
-                  <h1 className="text-xl font-bold neon-text">KEMTLS + OIDC</h1>
-                  <p className="text-xs text-muted-foreground">Post-Quantum Secure Authentication</p>
+              )}
+              {logs.map((log, i) => (
+                <div key={i} className="mb-0.5" style={{
+                  color: log.level === 'ok' ? 'var(--lime)' :
+                         log.level === 'err' ? 'var(--red)' :
+                         log.level === 'warn' ? 'var(--amber)' :
+                         log.level === 'data' ? 'var(--text-mid)' : 'var(--cyan)',
+                  textShadow: log.level === 'ok' ? '0 0 4px rgba(57,255,20,0.3)' :
+                              log.level === 'err' ? '0 0 4px rgba(255,23,68,0.3)' : 'none',
+                }}>
+                  {log.msg}
                 </div>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <StatusBadge 
-                  status={!isConnected ? "error" : isRunning ? "pending" : completedPhases.length === 4 ? "success" : "info"} 
-                  text={!isConnected ? "Disconnected" : isRunning ? "Running..." : completedPhases.length === 4 ? "Complete" : "Ready"} 
-                  icon={isConnected ? Wifi : WifiOff}
-                />
-                <Button
-                  onClick={startDemo}
-                  disabled={isRunning || !isConnected}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
-                >
-                  <Play className="w-4 h-4" />
-                  Run Demo
-                </Button>
-                <Button
-                  onClick={resetDemo}
-                  variant="outline"
-                  className="border-primary/30 hover:bg-primary/10 gap-2"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Reset
-                </Button>
-              </div>
+              ))}
+              {(flowState === 'running' || flowState === 'paused') && (
+                <div className="mt-1 flex items-center gap-1">
+                  <span className="neon-text">{'>'}</span>
+                  <span className="inline-block w-2 h-4" style={{
+                    background: flowState === 'paused' ? 'var(--magenta)' : 'var(--cyan)',
+                    animation: 'pulse-glow 0.8s ease infinite',
+                  }} />
+                </div>
+              )}
             </div>
           </div>
-        </header>
+        )}
+      </div>
 
-        <main className="container mx-auto px-4 py-8 space-y-8">
-          {/* Title Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center max-w-3xl mx-auto"
-          >
-            <h2 className="text-4xl font-bold mb-4">
-              <span className="text-gradient-cyber">Post-Quantum</span> OpenID Connect
-            </h2>
-            <p className="text-muted-foreground text-lg">
-              First implementation of OIDC secured with KEMTLS - quantum-resistant authentication 
-              using Kyber768 KEM and Dilithium3 signatures.
-            </p>
-          </motion.div>
+      {/* ═══ STATUS BAR ═══ */}
+      <footer className="relative z-20 h-8 flex items-center px-5 gap-6 text-[10px] font-code" style={{
+        background: 'rgba(6,13,31,0.9)',
+        borderTop: '1px solid rgba(0,229,255,0.08)',
+      }}>
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--lime)', boxShadow: '0 0 4px var(--lime)' }} />
+          <span style={{ color: 'var(--text-mid)' }}>CONNECTED</span>
+        </div>
+        <span style={{ color: 'var(--text-dim)' }}>│</span>
+        <span style={{ color: 'var(--text-mid)' }}>MODE: <span className="neon-text">{runMode === 'full' ? 'FULL FLOW' : 'STEP-BY-STEP'}</span></span>
+        <span style={{ color: 'var(--text-dim)' }}>│</span>
+        <span style={{ color: 'var(--text-mid)' }}>CRYPTO: <span style={{ color: 'var(--lime)' }}>ML-KEM-768 + ML-DSA-65</span></span>
+        {waitingForClick && (
+          <>
+            <span style={{ color: 'var(--text-dim)' }}>│</span>
+            <span style={{ color: 'var(--magenta)', animation: 'pulse-glow 1.5s ease infinite' }}>
+              CLICK NEXT STEP TO CONTINUE
+            </span>
+          </>
+        )}
+        <div className="flex-1" />
+        <span style={{ color: 'var(--text-dim)' }}>HelloWorld v1.0 │ {new Date().toLocaleTimeString()}</span>
+      </footer>
+    </div>
+  );
+}
 
-          {/* Architecture Overview */}
-          <motion.section
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Server className="w-5 h-5 text-primary" />
-              System Architecture
-            </h3>
-            <ArchitectureDiagram />
-          </motion.section>
+/* ══════════════════════════════════════════
+   VERTICAL FLOW VISUALIZER
+   Phases stacked vertically with BIGGER clickable nodes
+   ══════════════════════════════════════════ */
+function VerticalFlowVisualizer({ steps, selectedStep, flowState, runMode, waitingForClick, currentStepIdx, onNodeClick, activeThreat, onDismissThreat, scrollContainerRef }: {
+  steps: FlowStep[];
+  selectedStep: string | null;
+  flowState: FlowState;
+  runMode: RunMode;
+  waitingForClick: boolean;
+  currentStepIdx: number;
+  onNodeClick: (stepId: string) => void;
+  activeThreat: import('../components/ThreatPopup').ThreatInfo | null;
+  onDismissThreat: () => void;
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const stepIndexMap: Record<string, number> = {};
+  INITIAL_STEPS.forEach((s, i) => { stepIndexMap[s.id] = i; });
+  const phaseRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const lastScrolledPhaseRef = useRef(-1);
 
-          {/* Phase Cards */}
-          <section>
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-primary" />
-              Authentication Flow
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <PhaseCard
-                phase={1}
-                title="KEMTLS Handshake"
-                subtitle="Kyber768 key exchange"
-                icon={Lock}
-                isActive={activePhase === 1}
-                isComplete={completedPhases.includes(1)}
-                onClick={() => setActivePhase(1)}
-              >
-                <div className="space-y-3">
-                  <KeyDisplay 
-                    type="kyber" 
-                    label="Server Ephemeral" 
-                    publicKey={mockKeys.serverKyberPk}
-                  />
-                  <DataPacket
-                    from="Client"
-                    to="Server"
-                    data={[
-                      { label: "ct_eph", value: "Kyber ciphertext" },
-                      { label: "ct_lt", value: "Longterm cipher" },
-                    ]}
-                  />
-                </div>
-              </PhaseCard>
+  // Auto-scroll when a phase completes AND its threat is dismissed
+  // i.e. when currentStepIdx reaches the first step of the NEXT phase
+  useEffect(() => {
+    PHASES.forEach((phase, pi) => {
+      if (pi < PHASES.length - 1) {
+        const nextPhaseFirstStepId = PHASES[pi + 1].stepIds[0];
+        const nextPhaseFirstStepIdx = stepIndexMap[nextPhaseFirstStepId];
 
-              <PhaseCard
-                phase={2}
-                title="OIDC Authorization"
-                subtitle="OAuth 2.0 code flow"
-                icon={User}
-                isActive={activePhase === 2}
-                isComplete={completedPhases.includes(2)}
-                onClick={() => setActivePhase(2)}
-              >
-                <div className="space-y-2 text-xs font-mono">
-                  <div className="p-2 rounded bg-muted/50">
-                    <span className="text-primary">GET</span> /authorize
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <ArrowRight className="w-3 h-3" />
-                    <span>User authenticates</span>
-                  </div>
-                  <div className="p-2 rounded bg-secondary/20 text-secondary">
-                    code: a8f3k2...
-                  </div>
-                </div>
-              </PhaseCard>
+        // If we've reached or passed the first step of the next phase, we should scroll to it
+        if (currentStepIdx >= nextPhaseFirstStepIdx && pi > lastScrolledPhaseRef.current) {
+          lastScrolledPhaseRef.current = pi;
+          const nextEl = phaseRefs.current[pi + 1];
+          if (nextEl && scrollContainerRef.current) {
+            setTimeout(() => {
+              nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
+          }
+        }
+      }
+    });
+  }, [currentStepIdx, scrollContainerRef]);
 
-              <PhaseCard
-                phase={3}
-                title="Token Exchange"
-                subtitle="PQ-JWT issuance"
-                icon={FileKey}
-                isActive={activePhase === 3}
-                isComplete={completedPhases.includes(3)}
-                onClick={() => setActivePhase(3)}
-              >
-                <JWTDisplay 
-                  header={mockJWT.header}
-                  payload={mockJWT.payload}
-                  signature={mockJWT.signature}
-                />
-              </PhaseCard>
+  // Reset scroll tracking on flow restart
+  useEffect(() => {
+    if (flowState === 'idle') {
+      lastScrolledPhaseRef.current = -1;
+    }
+  }, [flowState]);
 
-              <PhaseCard
-                phase={4}
-                title="Resource Access"
-                subtitle="PoP verification"
-                icon={Fingerprint}
-                isActive={activePhase === 4}
-                isComplete={completedPhases.includes(4)}
-                onClick={() => setActivePhase(4)}
-              >
-                <div className="space-y-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-success" />
-                    <span>Token verified</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-success" />
-                    <span>PoP challenge passed</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-success" />
-                    <span>Resource granted</span>
-                  </div>
-                </div>
-              </PhaseCard>
+  return (
+    <div className="flex flex-col items-center py-8 px-8 gap-0 min-h-full justify-center">
+      {/* Idle hero */}
+      {flowState === 'idle' && (
+        <div className="text-center mb-8" style={{ animation: 'float 4s ease-in-out infinite' }}>
+          <div className="font-display text-4xl font-bold tracking-widest mb-3" style={{
+            background: 'linear-gradient(135deg, var(--cyan), var(--magenta))',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 24px rgba(0,229,255,0.35))',
+          }}>
+            PQ-OIDC
+          </div>
+          <div className="text-sm font-code" style={{ color: 'var(--text-mid)' }}>
+            Post-Quantum OpenID Connect over KEMTLS
+          </div>
+          <div className="mt-3 text-xs font-display tracking-widest" style={{ color: 'var(--text-dim)', animation: 'pulse-glow 2s ease infinite' }}>
+            {runMode === 'full' ? 'PRESS START TO RUN FULL FLOW' : 'PRESS START FOR STEP-BY-STEP WALKTHROUGH'}
+          </div>
+        </div>
+      )}
+
+      {/* Done hero */}
+      {flowState === 'done' && (
+        <div className="text-center mb-6" style={{ animation: 'float 4s ease-in-out infinite' }}>
+          <div className="font-display text-3xl font-bold tracking-widest neon-text-lime mb-2">
+            ✓ FLOW COMPLETE
+          </div>
+          <div className="text-sm font-code" style={{ color: 'var(--text-mid)' }}>
+            All 8 protocol steps executed successfully
+          </div>
+          <div className="flex gap-6 mt-4 justify-center">
+            <StatChip label="HANDSHAKE" value="2.1ms" color="var(--cyan)" />
+            <StatChip label="TOKEN SIZE" value="7.8KB" color="var(--magenta)" />
+            <StatChip label="SIG SIZE" value="3293B" color="var(--violet)" />
+            <StatChip label="TOTAL" value={`${(steps.reduce((a, s) => a + (s.durationMs || 0), 0) / 1000).toFixed(1)}s`} color="var(--lime)" />
+          </div>
+        </div>
+      )}
+
+      {/* Vertical phase layout */}
+      {PHASES.map((phase, pi) => {
+        const phaseSteps = steps.filter(s => phase.stepIds.includes(s.id));
+        const phaseActive = phaseSteps.some(s => s.status !== 'idle');
+        const phaseDone = phaseSteps.every(s => s.status === 'done');
+
+        return (
+          <div key={pi} ref={el => { phaseRefs.current[pi] = el; }} className="flex flex-col items-center w-full max-w-4xl">
+            {/* Phase label */}
+            <div className="text-xs font-display tracking-[0.3em] font-bold mb-3 transition-all duration-500" style={{
+              color: phaseDone ? 'var(--lime)' : phase.color,
+              textShadow: phaseActive ? `0 0 10px ${phase.color}` : 'none',
+              opacity: phaseActive || flowState === 'idle' ? 1 : 0.35,
+              fontSize: '13px',
+            }}>
+              {phaseDone ? `✓ ${phase.label}` : phase.label}
             </div>
-          </section>
 
-          {/* Live Demo Logs */}
-          {(isRunning || logs.length > 0) && (
-            <motion.section
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-8"
-            >
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <FileKey className="w-5 h-5 text-primary" />
-                Live Demo Output
-              </h3>
-              <TerminalWindow title="demo_full_flow.log">
-                <div ref={logsContainerRef} className="space-y-1 max-h-96 overflow-y-auto font-mono text-xs">
-                  {logs.map((log, idx) => (
-                    <div 
-                      key={idx}
-                      className={`
-                        ${log.level === 'success' ? 'text-success' : ''}
-                        ${log.level === 'error' ? 'text-destructive' : ''}
-                        ${log.level === 'warning' ? 'text-warning' : ''}
-                        ${log.level === 'info' ? 'text-muted-foreground' : ''}
-                      `}
+            {/* Step nodes in a row */}
+            <div className="flex items-start justify-center gap-12 w-full mb-2">
+              {phaseSteps.map((step, si) => {
+                const globalIdx = stepIndexMap[step.id];
+                const isSelected = selectedStep === step.id;
+                const isActive = step.status === 'running';
+                const isDone = step.status === 'done';
+                const isNextClickable = runMode === 'step' && waitingForClick && globalIdx === currentStepIdx + 1;
+
+                const hasThreat = runMode === 'step' && activeThreat?.stepId === step.id;
+
+                // Height of the node icon for centering the connector
+                const nodeSize = isSelected ? 80 : 68;
+                const connectorTop = nodeSize / 2;
+
+                return (
+                  <div key={step.id} className="flex items-start relative">
+                    {/* Node */}
+                    <button
+                      onClick={() => onNodeClick(step.id)}
+                      data-hover
+                      className="relative flex flex-col items-center justify-start transition-all duration-400 group"
+                      style={{ outline: 'none' }}
                     >
-                      {log.message}
-                    </div>
-                  ))}
-                  {isRunning && (
-                    <div className="text-primary animate-pulse">
-                      ▋ Running...
-                    </div>
-                  )}
-                </div>
-              </TerminalWindow>
-            </motion.section>
-          )}
+                      <div
+                        className="relative flex items-center justify-center transition-all duration-500"
+                        style={{
+                          width: `${nodeSize}px`,
+                          height: `${nodeSize}px`,
+                        }}
+                      >
+                        {/* Glow ring */}
+                        <div className="absolute inset-0 rounded-xl transition-all duration-500" style={{
+                          border: `2px solid ${
+                            isNextClickable ? 'var(--magenta)'
+                            : isDone ? 'var(--lime)'
+                            : isActive ? 'var(--amber)'
+                            : isSelected ? phase.color
+                            : 'rgba(92,168,212,0.12)'
+                          }`,
+                          boxShadow: isNextClickable ? '0 0 16px rgba(160,120,200,0.3), 0 0 30px rgba(160,120,200,0.1)'
+                            : isDone ? '0 0 12px rgba(78,201,160,0.25), 0 0 24px rgba(78,201,160,0.08)'
+                            : isActive ? '0 0 12px rgba(212,165,92,0.25), 0 0 24px rgba(212,165,92,0.08)'
+                            : isSelected ? `0 0 10px color-mix(in srgb, ${phase.color} 30%, transparent)`
+                            : 'none',
+                          background: isDone ? 'rgba(78,201,160,0.06)'
+                            : isActive ? 'rgba(212,165,92,0.06)'
+                            : isNextClickable ? 'rgba(160,120,200,0.06)'
+                            : 'rgba(92,168,212,0.02)',
+                          animation: isActive ? 'glow-breathe 2s ease infinite'
+                            : isNextClickable ? 'glow-breathe 1.5s ease infinite'
+                            : 'none',
+                          transform: isSelected ? 'scale(1.04)' : 'scale(1)',
+                        }} />
 
-          {/* Error Display - Only show when there's an actual error */}
-          {error && error.trim() !== '' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-4 p-4 rounded-lg border border-destructive/30 bg-destructive/10"
-            >
-              <p className="text-destructive font-semibold">Error:</p>
-              <p className="text-sm text-muted-foreground mt-1">{error}</p>
-            </motion.div>
-          )}
+                        {/* Inner label */}
+                        <div className="relative z-10 font-display font-bold" style={{
+                          fontSize: '16px',
+                          color: isDone ? 'var(--lime)'
+                            : isActive ? 'var(--amber)'
+                            : isNextClickable ? 'var(--magenta)'
+                            : 'var(--text-mid)',
+                        }}>
+                          {isDone ? '✓' : isActive ? '◉' : globalIdx + 1}
+                        </div>
 
-          {/* Performance Benchmarks */}
-          <section>
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-primary" />
-              Performance Benchmarks
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <BenchmarkCard
-                operation="KEMTLS Handshake"
-                time={benchmarkResults ? `~${benchmarkResults.kemtls_handshake.toFixed(2)} ms` : undefined}
-                comparison={{ label: "PQ-TLS", improvement: "-98.8%" }}
-                loading={benchmarksLoading}
-              />
-              <BenchmarkCard
-                operation="ID Token Creation"
-                time={benchmarkResults ? `~${benchmarkResults.token_creation.toFixed(2)} ms` : undefined}
-                comparison={{ label: "PQ-TLS", improvement: "-93.8%" }}
-                loading={benchmarksLoading}
-              />
-              <BenchmarkCard
-                operation="Token Verification"
-                time={benchmarkResults ? `~${benchmarkResults.token_verification.toFixed(2)} ms` : undefined}
-                comparison={{ label: "PQ-TLS", improvement: "-96.0%" }}
-                loading={benchmarksLoading}
-              />
-              <BenchmarkCard
-                operation="PoP Proof Creation"
-                time={benchmarkResults ? `~${benchmarkResults.pop_proof_creation.toFixed(2)} ms` : undefined}
-                comparison={{ label: "PQ-TLS", improvement: "-95.2%" }}
-                loading={benchmarksLoading}
-              />
-              <BenchmarkCard
-                operation="PoP Verification"
-                time={benchmarkResults ? `~${benchmarkResults.pop_verification.toFixed(2)} ms` : undefined}
-                comparison={{ label: "PQ-TLS", improvement: "-97.1%" }}
-                loading={benchmarksLoading}
-              />
-              <BenchmarkCard
-                operation="End-to-End Flow"
-                time={benchmarkResults ? `~${benchmarkResults.end_to_end.toFixed(2)} ms` : undefined}
-                comparison={{ label: "PQ-TLS", improvement: "-98.5%" }}
-                loading={benchmarksLoading}
-              />
+                        {/* Shimmer on active */}
+                        {isActive && (
+                          <div className="absolute inset-0 rounded-xl overflow-hidden">
+                            <div className="absolute inset-0" style={{
+                              background: 'linear-gradient(90deg, transparent 30%, rgba(212,165,92,0.1) 50%, transparent 70%)',
+                              animation: 'shimmer 2s ease-in-out infinite',
+                            }} />
+                          </div>
+                        )}
+
+                        {/* Click indicator pulse */}
+                        {isNextClickable && (
+                          <div className="absolute inset-0 rounded-xl" style={{
+                            border: '2px solid var(--magenta)',
+                            animation: 'pulse-glow 1s ease infinite',
+                            opacity: 0.4,
+                          }} />
+                        )}
+                      </div>
+
+                      {/* Step label */}
+                      <div className="mt-2 font-display font-semibold text-center leading-tight transition-all duration-300" style={{
+                        fontSize: '11px',
+                        letterSpacing: '0.08em',
+                        color: isDone ? 'var(--lime)'
+                          : isActive ? 'var(--amber)'
+                          : isNextClickable ? 'var(--magenta)'
+                          : isSelected ? 'var(--text-glow)'
+                          : 'var(--text-mid)',
+                        maxWidth: '100px',
+                      }}>
+                        {step.label}
+                      </div>
+
+                      {/* Detail text */}
+                      <div className="mt-1 font-code text-center leading-tight" style={{
+                        fontSize: '9px',
+                        color: 'var(--text-dim)',
+                        maxWidth: '120px',
+                        opacity: isSelected || isDone || isActive ? 0.7 : 0.35,
+                      }}>
+                        {step.detail.length > 30 ? step.detail.slice(0, 30) + '…' : step.detail}
+                      </div>
+
+                      {/* Duration badge */}
+                      {step.durationMs && (
+                        <div className="font-code mt-0.5" style={{ fontSize: '10px', color: 'var(--lime)' }}>
+                          {step.durationMs}ms
+                        </div>
+                      )}
+                    </button>
+
+                    {/* Threat tooltip — ALWAYS on the left side */}
+                    {hasThreat && activeThreat && (() => {
+                      const showOnLeft = true;
+                      const arrowColor = activeThreat.severity === 'critical' ? 'rgba(212,92,110,0.5)' : activeThreat.severity === 'high' ? 'rgba(212,140,92,0.5)' : 'rgba(212,165,92,0.5)';
+
+                      return (
+                        <div style={{
+                          position: 'absolute',
+                          top: `${connectorTop}px`,
+                          ...(showOnLeft
+                            ? { right: '100%', marginRight: '16px' }
+                            : { left: '100%', marginLeft: '16px' }),
+                          transform: 'translateY(-50%)',
+                          width: '320px',
+                          zIndex: 50,
+                          animation: showOnLeft ? 'slideInLeft 0.3s ease' : 'slideInRight 0.3s ease',
+                          pointerEvents: 'auto',
+                        }}>
+                          <div style={{
+                            position: 'absolute',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            width: 0,
+                            height: 0,
+                            ...(showOnLeft
+                              ? {
+                                  right: '-8px',
+                                  borderTop: '8px solid transparent',
+                                  borderBottom: '8px solid transparent',
+                                  borderLeft: `8px solid ${arrowColor}`,
+                                }
+                              : {
+                                  left: '-8px',
+                                  borderTop: '8px solid transparent',
+                                  borderBottom: '8px solid transparent',
+                                  borderRight: `8px solid ${arrowColor}`,
+                                }),
+                          }} />
+                          <InlineThreatTooltip threat={activeThreat} onClose={onDismissThreat} />
+                        </div>
+                      );
+                    })()}
+
+                    {/* Horizontal connector — centered at node icon midpoint */}
+                    {si < phaseSteps.length - 1 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: `${connectorTop}px`,
+                        left: '100%',
+                        transform: 'translateY(-50%)',
+                        width: '40px',
+                        height: '2px',
+                        marginLeft: '4px',
+                        borderRadius: '1px',
+                        background: isDone
+                          ? `linear-gradient(90deg, var(--lime), ${phase.color})`
+                          : isActive
+                          ? 'rgba(212,165,92,0.4)'
+                          : 'rgba(92,168,212,0.12)',
+                        boxShadow: isDone
+                          ? `0 0 6px ${phase.color}`
+                          : 'none',
+                        transition: 'all 0.5s',
+                        overflow: 'hidden',
+                      }}>
+                        {isActive && (
+                          <div className="absolute inset-y-0 w-8 animate-[shimmer_1s_linear_infinite]" style={{
+                            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
+                          }} />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          </section>
 
-          {/* Crypto Primitives */}
-          <section>
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Key className="w-5 h-5 text-primary" />
-              Cryptographic Primitives
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <TerminalWindow title="kyber768.kem">
-                <div className="space-y-2">
-                  <p className="text-primary">// Key Encapsulation</p>
-                  <p className="text-muted-foreground">NIST Level 3</p>
-                  <div className="pt-2 border-t border-primary/20 text-xs space-y-1">
-                    <p><span className="text-secondary">pk:</span> 1184 bytes</p>
-                    <p><span className="text-secondary">ct:</span> 1088 bytes</p>
-                    <p><span className="text-secondary">ss:</span> 32 bytes</p>
-                  </div>
-                </div>
-              </TerminalWindow>
+            {/* Vertical connector to next phase */}
+            {pi < PHASES.length - 1 && (
+              <div className="flex flex-col items-center my-3">
+                <div className="transition-all duration-500" style={{
+                  width: '2px',
+                  height: '40px',
+                  borderRadius: '1px',
+                  background: phaseDone
+                    ? `linear-gradient(180deg, ${phase.color}, ${PHASES[pi + 1].color})`
+                    : 'rgba(92,168,212,0.1)',
+                  boxShadow: phaseDone
+                    ? `0 0 8px color-mix(in srgb, ${PHASES[pi + 1].color} 30%, transparent)`
+                    : 'none',
+                }} />
+                <div className="w-0 h-0" style={{
+                  borderLeft: '6px solid transparent',
+                  borderRight: '6px solid transparent',
+                  borderTop: `8px solid ${phaseDone ? PHASES[pi + 1].color : 'rgba(92,168,212,0.1)'}`,
+                  filter: phaseDone ? `drop-shadow(0 0 4px ${PHASES[pi + 1].color})` : 'none',
+                  transition: 'all 0.5s',
+                }} />
+              </div>
+            )}
+          </div>
+        );
+      })}
 
-              <TerminalWindow title="dilithium3.sig">
-                <div className="space-y-2">
-                  <p className="text-accent">// Digital Signatures</p>
-                  <p className="text-muted-foreground">NIST Level 3</p>
-                  <div className="pt-2 border-t border-accent/20 text-xs space-y-1">
-                    <p><span className="text-secondary">pk:</span> 1952 bytes</p>
-                    <p><span className="text-secondary">sk:</span> 4032 bytes</p>
-                    <p><span className="text-secondary">sig:</span> 3293 bytes</p>
-                  </div>
-                </div>
-              </TerminalWindow>
+      {/* Running indicator */}
+      {flowState === 'running' && (
+        <div className="mt-4 text-center">
+          <div className="font-display text-base tracking-widest" style={{
+            color: 'var(--amber)',
+            textShadow: '0 0 10px rgba(255,171,0,0.5)',
+            animation: 'pulse-glow 1.5s ease infinite',
+          }}>
+            EXECUTING FLOW...
+          </div>
+        </div>
+      )}
 
-              <TerminalWindow title="chacha20-poly1305.aead">
-                <div className="space-y-2">
-                  <p className="text-secondary">// Symmetric Encryption</p>
-                  <p className="text-muted-foreground">AEAD Cipher</p>
-                  <div className="pt-2 border-t border-secondary/20 text-xs space-y-1">
-                    <p><span className="text-secondary">key:</span> 32 bytes</p>
-                    <p><span className="text-secondary">nonce:</span> 12 bytes</p>
-                    <p><span className="text-secondary">tag:</span> 16 bytes</p>
-                  </div>
-                </div>
-              </TerminalWindow>
+      {/* Paused indicator */}
+      {flowState === 'paused' && (
+        <div className="mt-4 text-center">
+          <div className="font-display text-base tracking-widest" style={{
+            color: 'var(--magenta)',
+            textShadow: '0 0 10px rgba(255,0,229,0.5)',
+            animation: 'pulse-glow 2s ease infinite',
+          }}>
+            ⏸ PAUSED — CLICK THE NEXT STEP TO CONTINUE
+          </div>
+        </div>
+      )}
 
-              <TerminalWindow title="hkdf-sha256.kdf">
-                <div className="space-y-2">
-                  <p className="text-warning">// Key Derivation</p>
-                  <p className="text-muted-foreground">Session Keys</p>
-                  <div className="pt-2 border-t border-warning/20 text-xs space-y-1">
-                    <p><span className="text-secondary">client_key:</span> 32 bytes</p>
-                    <p><span className="text-secondary">server_key:</span> 32 bytes</p>
-                    <p><span className="text-secondary">pop_key:</span> 32 bytes</p>
-                  </div>
-                </div>
-              </TerminalWindow>
+      {/* Small bottom spacer */}
+      <div className="h-4" />
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   INLINE THREAT TOOLTIP
+   Compact threat bubble attached to the active node
+   ══════════════════════════════════════════ */
+function InlineThreatTooltip({ threat, onClose }: { threat: import('../components/ThreatPopup').ThreatInfo; onClose: () => void }) {
+  const [phase, setPhase] = useState<'threat' | 'blocking' | 'blocked'>('threat');
+
+  useEffect(() => {
+    setPhase('threat');
+    const t1 = setTimeout(() => setPhase('blocking'), 2000);
+    const t2 = setTimeout(() => setPhase('blocked'), 3200);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [threat.id]);
+
+  const severityColor = {
+    critical: '#d45c6e',
+    high: '#d4885c',
+    medium: '#d4a55c',
+  }[threat.severity];
+
+  return (
+    <div style={{
+      borderRadius: '10px',
+      background: 'linear-gradient(135deg, rgba(255, 23, 68, 0.06), rgba(10, 4, 8, 0.95))',
+      border: `1px solid ${severityColor}50`,
+      boxShadow: `0 0 16px ${severityColor}25, 0 4px 20px rgba(0,0,0,0.4)`,
+      backdropFilter: 'blur(16px)',
+      overflow: 'hidden',
+    }}>
+      {/* Animated top bar */}
+      <div style={{
+        height: '2px',
+        background: phase === 'blocked'
+          ? 'linear-gradient(90deg, var(--lime), var(--teal))'
+          : `linear-gradient(90deg, transparent, ${severityColor}, transparent)`,
+        backgroundSize: '200% 100%',
+        animation: phase !== 'blocked' ? 'border-run 1.5s linear infinite' : 'none',
+        transition: 'background 0.5s ease',
+      }} />
+
+      {/* Header */}
+      <div style={{
+        padding: '10px 12px 8px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        borderBottom: `1px solid ${severityColor}15`,
+      }}>
+        <div style={{ fontSize: '14px', flexShrink: 0 }}>
+          {phase === 'blocked' ? '🛡️' : '⚠️'}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="font-display" style={{
+            fontSize: '8px',
+            letterSpacing: '0.2em',
+            color: phase === 'blocked' ? 'var(--lime)' : severityColor,
+            transition: 'color 0.4s',
+          }}>
+            {phase === 'blocked' ? '✓ THREAT NEUTRALIZED' : '⚡ THREAT DETECTED'}
+          </div>
+          <div className="font-display" style={{
+            fontSize: '12px',
+            fontWeight: 700,
+            color: 'var(--text-glow)',
+            letterSpacing: '0.05em',
+          }}>
+            {threat.title}
+          </div>
+        </div>
+        <div className="font-display" style={{
+          fontSize: '8px',
+          fontWeight: 700,
+          padding: '2px 6px',
+          borderRadius: '3px',
+          background: `${severityColor}20`,
+          border: `1px solid ${severityColor}40`,
+          color: severityColor,
+          letterSpacing: '0.1em',
+          flexShrink: 0,
+        }}>
+          {threat.severity.toUpperCase()}
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          data-hover
+          style={{
+            width: '24px',
+            height: '24px',
+            borderRadius: '5px',
+            background: `${severityColor}15`,
+            border: `1px solid ${severityColor}40`,
+            color: severityColor,
+            fontSize: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            lineHeight: 1,
+            cursor: 'pointer',
+          }}
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: '8px 12px 10px' }}>
+        <div className="font-body" style={{
+          fontSize: '11px',
+          color: 'var(--text-bright)',
+          lineHeight: 1.4,
+          marginBottom: '8px',
+        }}>
+          {threat.description}
+        </div>
+
+        <div style={{
+          padding: '8px 10px',
+          borderRadius: '6px',
+          background: phase === 'blocked' ? 'rgba(57,255,20,0.06)' : 'rgba(0,229,255,0.03)',
+          border: `1px solid ${phase === 'blocked' ? 'rgba(57,255,20,0.25)' : 'rgba(0,229,255,0.1)'}`,
+          transition: 'all 0.4s ease',
+        }}>
+          <div className="font-display" style={{
+            fontSize: '8px',
+            letterSpacing: '0.15em',
+            color: phase === 'blocked' ? 'var(--lime)' : 'var(--cyan)',
+            marginBottom: '3px',
+            transition: 'color 0.4s',
+          }}>
+            {phase === 'blocked' ? '✓ BLOCKED BY' : 'PROTOCOL DEFENSE'}
+          </div>
+          <div className="font-body" style={{
+            fontSize: '11px',
+            color: phase === 'blocked' ? 'var(--lime)' : 'var(--text-bright)',
+            lineHeight: 1.4,
+            transition: 'color 0.4s',
+            textShadow: phase === 'blocked' ? '0 0 4px rgba(57,255,20,0.2)' : 'none',
+          }}>
+            {threat.mitigation}
+          </div>
+        </div>
+
+        {phase === 'blocking' && (
+          <div style={{ marginTop: '8px' }}>
+            <div style={{
+              height: '2px',
+              borderRadius: '1px',
+              background: 'rgba(0,229,255,0.1)',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%',
+                background: 'linear-gradient(90deg, var(--cyan), var(--lime))',
+                animation: 'progress-fill 1.2s ease forwards',
+                boxShadow: '0 0 8px var(--lime)',
+              }} />
             </div>
-          </section>
-
-          {/* Footer */}
-          <footer className="text-center py-8 border-t border-primary/20">
-            <p className="text-muted-foreground text-sm">
-              KEMTLS + OIDC • Post-Quantum Secure • Cybersecurity Challenge Hackathon 2026
-            </p>
-            <p className="text-xs text-muted-foreground/50 mt-2">
-              IIT Kanpur • E3iHub • HACK IITK
-            </p>
-          </footer>
-        </main>
+          </div>
+        )}
       </div>
     </div>
   );
-};
-
-// Detailed phase view component
-interface PhaseDetailViewProps {
-  phase: number;
-  mockKeys: { serverKyberPk: string; clientDilithiumPk: string; sessionKey: string };
-  mockJWT: { header: object; payload: object; signature: string };
 }
 
-const PhaseDetailView = ({ phase, mockKeys, mockJWT }: PhaseDetailViewProps) => {
-  if (phase === 1) {
-    return (
-      <TerminalWindow title="kemtls_handshake.log">
-        <div className="space-y-3">
-          <p className="text-success">✓ Server sends ServerHello</p>
-          <div className="pl-4 text-xs space-y-1">
-            <p><span className="text-muted-foreground">server_ephemeral_pk:</span> <span className="text-primary">{mockKeys.serverKyberPk.slice(0, 30)}...</span></p>
-            <p><span className="text-muted-foreground">server_longterm_pk:</span> <span className="text-primary">Kyber768 (1184 bytes)</span></p>
-            <p><span className="text-muted-foreground">session_id:</span> <span className="text-accent">kemtls-001</span></p>
+/* ══════════════════════════════════════════
+   STEP EXPLANATION PANEL (step-by-step mode)
+   Shown on the right when paused at a step
+   ══════════════════════════════════════════ */
+function StepExplanation({ step, threat }: { step: FlowStep; threat?: { title: string; description: string; mitigation: string; severity: string } }) {
+  return (
+    <div className="p-5 flex flex-col gap-4">
+      {/* Step header */}
+      <div>
+        <div className="text-[10px] font-display tracking-[0.3em] mb-1" style={{ color: 'var(--lime)' }}>
+          ✓ STEP COMPLETE
+        </div>
+        <div className="font-display text-xl font-bold tracking-wider" style={{
+          color: 'var(--text-glow)',
+          textShadow: '0 0 10px rgba(0,229,255,0.35)',
+        }}>
+          {step.label}
+        </div>
+        <div className="text-sm font-code mt-1" style={{ color: 'var(--text-mid)' }}>
+          {step.detail}
+        </div>
+      </div>
+
+      {/* How it works */}
+      <div style={{
+        padding: '14px 16px',
+        borderRadius: '10px',
+        background: 'rgba(0, 229, 255, 0.05)',
+        border: '1px solid rgba(0, 229, 255, 0.15)',
+      }}>
+        <div className="font-display text-[10px] tracking-[0.2em] mb-2" style={{ color: 'var(--cyan)' }}>
+          ⚙ HOW IT WORKS
+        </div>
+        <div className="font-body text-[13px] leading-relaxed" style={{ color: 'var(--text-bright)' }}>
+          {step.explanation}
+        </div>
+      </div>
+
+      {/* Data inspector */}
+      {step.data && (
+        <div>
+          <div className="font-display text-[10px] tracking-[0.2em] mb-2" style={{ color: 'var(--cyan)' }}>
+            📊 DATA CAPTURED
           </div>
-          <p className="text-success">✓ Client encapsulates to both keys</p>
-          <div className="pl-4 text-xs space-y-1">
-            <p><span className="text-muted-foreground">ct_ephemeral:</span> <span className="text-secondary">1088 bytes</span></p>
-            <p><span className="text-muted-foreground">ct_longterm:</span> <span className="text-secondary">1088 bytes</span></p>
-          </div>
-          <p className="text-success">✓ Server decapsulates (authenticates!)</p>
-          <p className="text-success">✓ Session keys derived via HKDF</p>
-          <div className="pl-4 text-xs">
-            <p><span className="text-muted-foreground">session_key:</span> <span className="text-warning">{mockKeys.sessionKey}</span></p>
+          <div className="flex flex-col gap-2">
+            {Object.entries(step.data).map(([key, val]) => (
+              <div key={key} className="rounded-lg p-3 transition-all duration-200" style={{
+                background: 'rgba(0,229,255,0.04)',
+                border: '1px solid rgba(0,229,255,0.08)',
+              }}>
+                <div className="text-[9px] font-display tracking-wider uppercase mb-0.5" style={{ color: 'var(--text-dim)' }}>
+                  {key}
+                </div>
+                <div className="text-[12px] font-code break-all" style={{ color: 'var(--text-bright)' }}>
+                  {val}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      </TerminalWindow>
-    );
-  }
+      )}
 
-  if (phase === 2) {
-    return (
-      <TerminalWindow title="oidc_authorization.log">
-        <div className="space-y-3">
-          <p className="text-primary">→ GET /authorize</p>
-          <div className="pl-4 text-xs space-y-1 text-muted-foreground">
-            <p>response_type: <span className="text-foreground">code</span></p>
-            <p>client_id: <span className="text-foreground">demo-client</span></p>
-            <p>scope: <span className="text-foreground">openid profile email</span></p>
-            <p>state: <span className="text-accent">random_state_123</span></p>
+      {/* Active threat for this step */}
+      {threat && (
+        <div style={{
+          padding: '14px 16px',
+          borderRadius: '10px',
+          background: 'rgba(255, 23, 68, 0.06)',
+          border: '1px solid rgba(255, 23, 68, 0.25)',
+        }}>
+          <div className="font-display text-[10px] tracking-[0.2em] mb-2" style={{ color: 'var(--red)' }}>
+            ⚠ THREAT AT THIS STEP
           </div>
-          <p className="text-warning">⟳ User authentication...</p>
-          <p className="text-success">✓ User authenticated: alice@example.com</p>
-          <p className="text-success">✓ Authorization code issued</p>
-          <div className="pl-4 text-xs">
-            <p><span className="text-muted-foreground">code:</span> <span className="text-secondary">a8f3k2x9m1b7...</span></p>
-            <p><span className="text-muted-foreground">expires_in:</span> <span className="text-foreground">600s</span></p>
+          <div className="font-display text-sm font-bold mb-1" style={{ color: 'var(--red)', textShadow: '0 0 6px rgba(255,23,68,0.35)' }}>
+            {threat.title}
+          </div>
+          <div className="font-body text-[12px] leading-relaxed mb-3" style={{ color: 'var(--text-bright)' }}>
+            {threat.description}
+          </div>
+
+          <div style={{
+            padding: '10px 12px',
+            borderRadius: '8px',
+            background: 'rgba(57, 255, 20, 0.06)',
+            border: '1px solid rgba(57, 255, 20, 0.25)',
+          }}>
+            <div className="font-display text-[10px] tracking-[0.2em] mb-1" style={{ color: 'var(--lime)' }}>
+              🛡️ BLOCKED BY
+            </div>
+            <div className="font-body text-[12px] leading-relaxed" style={{ color: 'var(--lime)' }}>
+              {threat.mitigation}
+            </div>
           </div>
         </div>
-      </TerminalWindow>
-    );
-  }
+      )}
 
-  if (phase === 3) {
-    return (
-      <TerminalWindow title="token_exchange.log">
-        <div className="space-y-3">
-          <p className="text-primary">→ POST /token</p>
-          <div className="pl-4 text-xs space-y-1 text-muted-foreground">
-            <p>grant_type: <span className="text-foreground">authorization_code</span></p>
-            <p>code: <span className="text-secondary">a8f3k2x9m1b7...</span></p>
-          </div>
-          <p className="text-success">✓ Code validated</p>
-          <p className="text-success">✓ Creating PQ-JWT with Dilithium3</p>
-          <div className="pl-4 text-xs space-y-1">
-            <p><span className="text-accent">alg:</span> DILITHIUM3</p>
-            <p><span className="text-muted-foreground">cnf.jwk:</span> <span className="text-primary">Client ephemeral pubkey embedded</span></p>
-            <p><span className="text-muted-foreground">signature:</span> <span className="text-secondary">~3293 bytes</span></p>
-          </div>
-          <p className="text-success">✓ ID Token issued with PoP binding</p>
-        </div>
-      </TerminalWindow>
-    );
-  }
+      {/* Continue prompt */}
+      <div className="text-center mt-2 font-display text-xs tracking-widest" style={{
+        color: 'var(--magenta)',
+        animation: 'pulse-glow 2s ease infinite',
+      }}>
+        CLICK NEXT STEP NODE TO CONTINUE →
+      </div>
+    </div>
+  );
+}
 
-  if (phase === 4) {
-    return (
-      <TerminalWindow title="resource_access.log">
-        <div className="space-y-3">
-          <p className="text-primary">→ GET /api/userinfo</p>
-          <p className="text-success">✓ Token signature verified (Dilithium3)</p>
-          <p className="text-success">✓ Token not expired</p>
-          <p className="text-warning">⟳ PoP Challenge issued</p>
-          <div className="pl-4 text-xs space-y-1">
-            <p><span className="text-muted-foreground">nonce:</span> <span className="text-accent">challenge_nonce_xyz</span></p>
-            <p><span className="text-muted-foreground">timestamp:</span> <span className="text-foreground">{Date.now()}</span></p>
-          </div>
-          <p className="text-primary">→ Client signs challenge with ephemeral key</p>
-          <p className="text-success">✓ PoP proof verified</p>
-          <div className="pl-4 text-xs">
-            <p><span className="text-muted-foreground">client_pk from:</span> <span className="text-primary">token.cnf.jwk.x</span></p>
-          </div>
-          <p className="text-success neon-text">✓ ACCESS GRANTED</p>
-          <div className="mt-2 p-2 rounded bg-success/10 border border-success/30 text-xs">
-            <p className="text-success">{"{"} user_id: "alice@example.com", name: "Alice" {"}"}</p>
-          </div>
-        </div>
-      </TerminalWindow>
-    );
-  }
-
-  return null;
-};
-
-export default Index;
+/* ══════════════════════════════════════════
+   STAT CHIP (completion summary)
+   ══════════════════════════════════════════ */
+function StatChip({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="text-center px-5 py-3 rounded-lg transition-all duration-200" style={{
+      background: `${color}0a`,
+      border: `1px solid ${color}35`,
+    }}>
+      <div className="text-[9px] font-display tracking-widest mb-1" style={{ color: `${color}90` }}>{label}</div>
+      <div className="text-base font-display font-bold" style={{ color, textShadow: `0 0 10px ${color}` }}>{value}</div>
+    </div>
+  );
+}
