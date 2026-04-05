@@ -10,6 +10,7 @@ import hashlib
 import base64
 import time
 from typing import Dict, Any, Optional, List
+from urllib.parse import urlencode
 from client.kemtls_http_client import KEMTLSHttpClient
 from utils.helpers import generate_random_string
 
@@ -78,7 +79,7 @@ class OIDCClient:
             'state': generate_random_string(16)
         }
         
-        query = "&".join([f"{k}={v}" for k, v in params.items()])
+        query = urlencode(params)
         auth_url = f"{self.issuer_url}/authorize?{query}"
         
         return auth_url

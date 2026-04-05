@@ -7,6 +7,7 @@ transitions to an encrypted record layer, and bridges to a Flask app.
 
 import socket
 import threading
+import traceback
 from typing import Dict, Any, Optional
 from flask import Flask
 from .handshake import ServerHandshake
@@ -97,7 +98,8 @@ class KEMTLSTCPServer:
             record_layer.send_record(response_bytes)
             
         except Exception as e:
-            print(f"Error handling client: {e}")
+            print(f"Error handling client: {e!r}")
+            traceback.print_exc()
         finally:
             client_sock.close()
 

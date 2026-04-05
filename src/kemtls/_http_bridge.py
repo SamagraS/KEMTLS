@@ -52,6 +52,12 @@ def call_flask_app(app: Flask, session: KEMTLSSession, raw_request: bytes) -> by
     Injects KEMTLS session and calls the Flask app's WSGI interface.
     """
     req = parse_http_request(raw_request)
+    path, _, query = req['path'].partition('?')
+    req_headers = req['headers']
+    content_type = req_headers.get('content-type', '')
+    content_length = req_headers.get('content-length')
+    if not content_length:
+        content_length = str(len(req['body']))
     
     # Mock WSGI environment
     environ = {
@@ -62,15 +68,26 @@ def call_flask_app(app: Flask, session: KEMTLSSession, raw_request: bytes) -> by
         'wsgi.multithread': False,
         'wsgi.multiprocess': False,
         'wsgi.run_once': False,
+        'SERVER_PROTOCOL': req['version'],
         'REQUEST_METHOD': req['method'],
-        'PATH_INFO': req['path'],
+        'SCRIPT_NAME': '',
+        'PATH_INFO': path,
+        'QUERY_STRING': query,
         'SERVER_NAME': 'localhost',
         'SERVER_PORT': '443',
         'REMOTE_ADDR': '127.0.0.1',
-        'headers': req['headers'],
+        'CONTENT_TYPE': content_type,
+        'CONTENT_LENGTH': content_length,
         'kemtls.session': session,
         'kemtls.mode': session.handshake_mode
     }
+
+    # Populate standard WSGI HTTP_ headers expected by Flask/Werkzeug.
+    for key, value in req_headers.items():
+        if key in ('content-type', 'content-length'):
+            continue
+        wsgi_key = 'HTTP_' + key.upper().replace('-', '_')
+        environ[wsgi_key] = value
     
     # Simple WSGI call logic
     response_body = []

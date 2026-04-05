@@ -8,7 +8,7 @@ response parsing for KEMTLS-secured HTTP interaction.
 
 import json
 from typing import Dict, Any, Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode
 from kemtls.client import KEMTLSClient
 from kemtls.pdk import PDKTrustStore
 
@@ -59,8 +59,8 @@ class KEMTLSHttpClient:
             headers['Content-Type'] = 'application/json'
             body = json.dumps(json_data).encode('utf-8')
         elif data:
-            # Simple form encoding
-            body = "&".join([f"{k}={v}" for k, v in data.items()]).encode('utf-8')
+            # Form encoding with proper escaping.
+            body = urlencode(data).encode('utf-8')
             headers = headers or {}
             headers['Content-Type'] = 'application/x-www-form-urlencoded'
         else:
@@ -72,6 +72,12 @@ class KEMTLSHttpClient:
         """
         Dispatch an HTTP request over KEMTLS.
         """
+        # Keep the underlying transport client aligned with mutable public fields.
+        self.client.expected_identity = self.expected_identity
+        self.client.ca_pk = self.ca_pk
+        self.client.pdk_store = self.pdk_store
+        self.client.mode = self.mode
+
         parsed = urlparse(url)
         if parsed.scheme != "kemtls":
             raise ValueError(f"Unsupported scheme: {parsed.scheme}. Only 'kemtls://' is supported.")
@@ -79,13 +85,15 @@ class KEMTLSHttpClient:
         host = parsed.hostname
         port = parsed.port or 4433
         path = parsed.path or "/"
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
         
         if params:
             query = "&".join([f"{k}={v}" for k, v in params.items()])
             path = f"{path}?{query}"
             
         # Format headers
-        full_headers = headers or {}
+        full_headers = dict(headers or {})
         if 'Host' not in full_headers:
             full_headers['Host'] = host
             
@@ -96,6 +104,7 @@ class KEMTLSHttpClient:
             port=port,
             method=method,
             path=path,
+            headers=full_headers,
             body=body
         )
         
@@ -141,12 +150,13 @@ class KEMTLSHttpClient:
                     
             # Try parsing body as JSON if needed
             parsed_body = body
-            if headers.get('Content-Type') == 'application/json':
+            content_type = headers.get('Content-Type', headers.get('content-type', '')).lower()
+            if content_type.startswith('application/json'):
                 try:
                     parsed_body = json.loads(body.decode('utf-8'))
                 except:
                     pass
-            elif 'text/' in headers.get('Content-Type', ''):
+            elif content_type.startswith('text/'):
                 try:
                     parsed_body = body.decode('utf-8')
                 except:

@@ -30,7 +30,15 @@ class KEMTLSClient:
         self.mode = mode
         self.session = None
 
-    def request(self, host: str, port: int, method: str, path: str, body: bytes = b"") -> Tuple[bytes, Any]:
+    def request(
+        self,
+        host: str,
+        port: int,
+        method: str,
+        path: str,
+        headers: Optional[Dict[str, str]] = None,
+        body: bytes = b"",
+    ) -> Tuple[bytes, Any]:
         """
         Connect to a server, perform handshake, and send an encrypted request.
         """
@@ -71,7 +79,16 @@ class KEMTLSClient:
             record_layer = for_client(session, sock)
             
             # 3. Send HTTP Request
-            http_req = f"{method} {path} HTTP/1.1\r\nHost: {host}\r\n\r\n".encode('ascii') + body
+            header_lines = [f"{method} {path} HTTP/1.1", f"Host: {host}"]
+            for key, value in (headers or {}).items():
+                if key.lower() == "host":
+                    continue
+                header_lines.append(f"{key}: {value}")
+            if body and not any(k.lower() == "content-length" for k in (headers or {})):
+                header_lines.append(f"Content-Length: {len(body)}")
+            header_lines.append("Connection: close")
+
+            http_req = ("\r\n".join(header_lines) + "\r\n\r\n").encode('ascii') + body
             record_layer.send_record(http_req)
             
             # 4. Receive Response
