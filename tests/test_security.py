@@ -1,145 +1,234 @@
-"""Role: Security tests.
-
-Tests:
-- Token theft scenarios
-- Replay attacks
-- Expired token handling
-- Invalid signature detection
-
-Ensures: Security properties hold
-"""
-
-import os
-import sys
+import hashlib
 import time
-import unittest
+from dataclasses import dataclass
 
+import pytest
 
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
-SRC_DIR = os.path.join(ROOT_DIR, "src")
-if SRC_DIR not in sys.path:
-	sys.path.insert(0, SRC_DIR)
-
-
-from oidc.authorization import AuthorizationEndpoint
-from oidc.token import TokenEndpoint
+from oidc.auth_endpoints import AuthorizationEndpoint, InMemoryClientRegistry
+from oidc.introspection_endpoints import IntrospectionEndpoint
 from oidc.jwt_handler import PQJWT
+<<<<<<< Updated upstream
 from crypto.ml_dsa import DilithiumSignature
 from utils.helpers import get_timestamp
+=======
+from oidc.refresh_store import RefreshTokenStore
+from oidc.token_endpoints import TokenEndpoint
+from oidc.userinfo_endpoints import UserInfoEndpoint
+from utils.encoding import base64url_encode
+>>>>>>> Stashed changes
 
 
-class TestAuthorizationCodeReplay(unittest.TestCase):
-	def test_authorization_code_replay(self):
-		endpoint = AuthorizationEndpoint()
-		result = endpoint.handle_authorize_request(
-			client_id="client123",
-			redirect_uri="https://client.example/cb",
-			scope="openid",
-			state="state123",
-			user_id="alice",
-		)
-		code = result["code"]
-
-		first = endpoint.validate_code(code, "client123", "https://client.example/cb")
-		self.assertIsNotNone(first)
-
-		second = endpoint.validate_code(code, "client123", "https://client.example/cb")
-		self.assertIsNone(second)
+@dataclass
+class DummySession:
+    session_binding_id: bytes
+    refresh_binding_id: bytes
+    handshake_mode: str = "baseline"
 
 
-class TestTokenSecurity(unittest.TestCase):
-	def setUp(self):
-		sig = DilithiumSignature()
-		self.issuer_pk, self.issuer_sk = sig.generate_keypair()
-		self.client_pk, _ = sig.generate_keypair()
-
-		self.auth = AuthorizationEndpoint()
-		self.token_endpoint = TokenEndpoint(
-			issuer_url="https://issuer.example",
-			issuer_sk=self.issuer_sk,
-			issuer_pk=self.issuer_pk,
-		)
-
-	def _issue_token(self, exp_offset: int = 3600):
-		result = self.auth.handle_authorize_request(
-			client_id="client123",
-			redirect_uri="https://client.example/cb",
-			scope="openid profile email",
-			state="state123",
-			nonce="nonce123",
-			user_id="alice",
-		)
-		code = result["code"]
-		code_data = self.auth.validate_code(code, "client123", "https://client.example/cb")
-
-		# Manually override exp for security tests
-		code_data["issued_at"] = get_timestamp()
-		code_data["expires_at"] = get_timestamp() + 600
-
-		response = self.token_endpoint.handle_token_request(
-			grant_type="authorization_code",
-			code=code,
-			code_data=code_data,
-			client_ephemeral_pk=self.client_pk,
-			session_id="session-123",
-			session_key=b"\x02" * 32,
-		)
-
-		return response["id_token"]
-
-	def test_token_theft_invalid_signature(self):
-		id_token = self._issue_token()
-		parts = id_token.split(".")
-		# Tamper signature to simulate theft/tampering
-		parts[2] = "tampered"
-		tampered = ".".join(parts)
-
-		jwt = PQJWT()
-		with self.assertRaises(ValueError):
-			jwt.verify_id_token(tampered, self.issuer_pk)
-
-	def test_expired_token_handling(self):
-		id_token = self._issue_token()
-		jwt = PQJWT()
-		claims = jwt.verify_id_token(id_token, self.issuer_pk)
-
-		# Force expiration by waiting or modifying exp claim
-		claims["exp"] = int(time.time()) - 1
-
-		# Recreate token with expired exp
-		expired_token = jwt.create_id_token(
-			claims,
-			self.issuer_sk,
-			self.issuer_pk,
-			client_ephemeral_pk=self.client_pk,
-			session_key=b"\x02" * 32,
-			session_id="session-123",
-		)
-
-		with self.assertRaises(ValueError):
-			jwt.verify_id_token(expired_token, self.issuer_pk)
-
-	def test_invalid_signature_detection(self):
-		id_token = self._issue_token()
-		jwt = PQJWT()
-
-		# Verify with wrong issuer key
-		sig = DilithiumSignature()
-		wrong_pk, _ = sig.generate_keypair()
-
-		with self.assertRaises(ValueError):
-			jwt.verify_id_token(id_token, wrong_pk)
-
-	def test_token_replay_same_token(self):
-		id_token = self._issue_token()
-		jwt = PQJWT()
-
-		first = jwt.verify_id_token(id_token, self.issuer_pk)
-		second = jwt.verify_id_token(id_token, self.issuer_pk)
-
-		# Replay is not prevented at JWT layer; ensure claims are identical
-		self.assertEqual(first, second)
+def _patch_signatures(monkeypatch):
+    monkeypatch.setattr(
+        "oidc.jwt_handler.MLDSA65.sign",
+        lambda _sk, message: hashlib.sha256(message).digest(),
+    )
+    monkeypatch.setattr(
+        "oidc.jwt_handler.MLDSA65.verify",
+        lambda _pk, message, signature: signature == hashlib.sha256(message).digest(),
+    )
 
 
-if __name__ == "__main__":
-	unittest.main()
+def _pkce_challenge(verifier: str) -> str:
+    return base64url_encode(hashlib.sha256(verifier.encode("ascii")).digest())
+
+
+def _build_stack():
+    registry = InMemoryClientRegistry(
+        {"client123": {"redirect_uris": ["https://client.example/cb"]}}
+    )
+    auth = AuthorizationEndpoint(client_registry=registry)
+    token_endpoint = TokenEndpoint(
+        issuer_url="https://issuer.example",
+        issuer_sk=b"issuer-secret-key",
+        issuer_pk=b"issuer-public-key",
+        authorization_code_store=auth.code_store,
+        refresh_token_store=RefreshTokenStore(),
+        signing_kid="signing-key-1",
+    )
+    userinfo = UserInfoEndpoint(
+        b"issuer-public-key",
+        issuer="https://issuer.example",
+        audience="client123",
+    )
+    introspection = IntrospectionEndpoint(
+        b"issuer-public-key",
+        issuer="https://issuer.example",
+        audience="client123",
+    )
+    return auth, token_endpoint, userinfo, introspection
+
+
+def _issue_tokens(auth, token_endpoint, *, verifier="verifier-123", session=None):
+    session = session or DummySession(b"a" * 32, b"b" * 32)
+    auth_result = auth.handle_authorize_request(
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        scope="openid profile email",
+        state="state123",
+        nonce="nonce123",
+        user_id="alice",
+        code_challenge=_pkce_challenge(verifier),
+    )
+    return token_endpoint.handle_token_request(
+        grant_type="authorization_code",
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        code=auth_result["code"],
+        code_verifier=verifier,
+        session=session,
+    )
+
+
+def test_authorization_code_is_one_time_use(monkeypatch):
+    _patch_signatures(monkeypatch)
+    auth, token_endpoint, _, _ = _build_stack()
+    verifier = "verifier-123"
+    auth_result = auth.handle_authorize_request(
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        scope="openid",
+        state="state123",
+        user_id="alice",
+        code_challenge=_pkce_challenge(verifier),
+    )
+
+    first = token_endpoint.handle_token_request(
+        grant_type="authorization_code",
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        code=auth_result["code"],
+        code_verifier=verifier,
+        session=DummySession(b"a" * 32, b"b" * 32),
+    )
+    second = token_endpoint.handle_token_request(
+        grant_type="authorization_code",
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        code=auth_result["code"],
+        code_verifier=verifier,
+        session=DummySession(b"a" * 32, b"b" * 32),
+    )
+
+    assert "access_token" in first
+    assert second["error"] == "invalid_grant"
+
+
+def test_access_token_replay_is_rejected_on_new_session(monkeypatch):
+    _patch_signatures(monkeypatch)
+    auth, token_endpoint, userinfo, introspection = _build_stack()
+    original_session = DummySession(b"a" * 32, b"b" * 32)
+    tokens = _issue_tokens(auth, token_endpoint, session=original_session)
+
+    payload, status = userinfo.handle_userinfo_request(
+        tokens["access_token"],
+        session=DummySession(b"z" * 32, b"b" * 32),
+    )
+    introspected = introspection.introspect(
+        tokens["access_token"],
+        session=DummySession(b"z" * 32, b"b" * 32, "pdk"),
+    )
+
+    assert status == 401
+    assert payload["error"] == "binding_mismatch"
+    assert introspected["active"] is False
+    assert introspected["binding_status"] is False
+
+
+def test_refresh_token_reuse_revokes_the_family(monkeypatch):
+    _patch_signatures(monkeypatch)
+    auth, token_endpoint, _, _ = _build_stack()
+    tokens = _issue_tokens(auth, token_endpoint)
+
+    refreshed = token_endpoint.handle_token_request(
+        grant_type="refresh_token",
+        client_id="client123",
+        refresh_token=tokens["refresh_token"],
+        session=DummySession(b"c" * 32, b"b" * 32),
+    )
+    replay = token_endpoint.handle_token_request(
+        grant_type="refresh_token",
+        client_id="client123",
+        refresh_token=tokens["refresh_token"],
+        session=DummySession(b"c" * 32, b"b" * 32),
+    )
+    stale_family_member = token_endpoint.handle_token_request(
+        grant_type="refresh_token",
+        client_id="client123",
+        refresh_token=refreshed["refresh_token"],
+        session=DummySession(b"c" * 32, b"b" * 32),
+    )
+
+    assert "refresh_token" in refreshed
+    assert replay["error"] == "invalid_grant"
+    assert stale_family_member["error"] == "invalid_grant"
+
+
+def test_tampered_and_expired_access_tokens_are_rejected(monkeypatch):
+    _patch_signatures(monkeypatch)
+    auth, token_endpoint, userinfo, introspection = _build_stack()
+    tokens = _issue_tokens(auth, token_endpoint)
+
+    parts = tokens["access_token"].split(".")
+    tampered = ".".join([parts[0], parts[1], base64url_encode(b"\x00" * 32)])
+    invalid_payload, invalid_status = userinfo.handle_userinfo_request(
+        tampered,
+        session=DummySession(b"a" * 32, b"b" * 32),
+    )
+    assert invalid_status == 401
+    assert invalid_payload["error"] == "invalid_token"
+
+    jwt = PQJWT()
+    expired = jwt.create_access_token(
+        {
+            "iss": "https://issuer.example",
+            "sub": "alice",
+            "aud": "client123",
+            "client_id": "client123",
+            "scope": "openid",
+            "exp": int(time.time()) - 1,
+        },
+        b"issuer-secret-key",
+        kid="signing-key-1",
+        cnf_claim={"cnf": {"kmt": "kemtls-exporter-v1", "kbh": "x"}},
+    )
+
+    expired_info = introspection.introspect(expired)
+    assert expired_info == {"active": False}
+
+
+def test_wrong_audience_is_rejected_across_validation_surfaces(monkeypatch):
+    _patch_signatures(monkeypatch)
+    auth, token_endpoint, userinfo, introspection = _build_stack()
+    tokens = _issue_tokens(auth, token_endpoint)
+
+    wrong_audience_userinfo = UserInfoEndpoint(
+        b"issuer-public-key",
+        issuer="https://issuer.example",
+        audience="wrong-audience",
+    )
+    wrong_audience_introspection = IntrospectionEndpoint(
+        b"issuer-public-key",
+        issuer="https://issuer.example",
+        audience="wrong-audience",
+    )
+
+    payload, status = wrong_audience_userinfo.handle_userinfo_request(
+        tokens["access_token"],
+        session=DummySession(b"a" * 32, b"b" * 32),
+    )
+    introspected = wrong_audience_introspection.introspect(
+        tokens["access_token"],
+        session=DummySession(b"a" * 32, b"b" * 32),
+    )
+
+    assert status == 401
+    assert payload["error"] == "invalid_token"
+    assert introspected == {"active": False}

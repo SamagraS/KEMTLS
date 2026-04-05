@@ -1,160 +1,192 @@
-"""Role: Unit tests for OIDC protocol.
+import hashlib
+import time
+from dataclasses import dataclass
 
-Tests:
-- Authorization code flow
-- Token issuance
-- JWT structure
-- Claims inclusion
-
-Ensures: OIDC compliance
-"""
-
-import json
-import os
-import sys
-import unittest
+from crypto.ml_dsa import MLDSA65
+from oidc.auth_endpoints import AuthorizationEndpoint, InMemoryClientRegistry
+from oidc.discovery import DiscoveryEndpoint
+from oidc.jwks import JWKSEndpoint
+from oidc.jwt_handler import ACCESS_TOKEN_TYPE, ID_TOKEN_TYPE, PQJWT
+from oidc.refresh_store import RefreshTokenStore
+from oidc.token_endpoints import TokenEndpoint
+from utils.encoding import base64url_encode
 
 
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
-SRC_DIR = os.path.join(ROOT_DIR, "src")
-if SRC_DIR not in sys.path:
-	sys.path.insert(0, SRC_DIR)
+@dataclass
+class DummySession:
+    session_binding_id: bytes
+    refresh_binding_id: bytes
+    handshake_mode: str = "baseline"
 
 
+<<<<<<< Updated upstream
 from oidc.authorization import AuthorizationEndpoint
 from oidc.token import TokenEndpoint
 from oidc.jwt_handler import PQJWT
 from utils.encoding import base64url_decode
 from utils.helpers import get_timestamp
 from crypto.ml_dsa import DilithiumSignature
+=======
+def _patch_signatures(monkeypatch):
+    monkeypatch.setattr(
+        "oidc.jwt_handler.MLDSA65.sign",
+        lambda _sk, message: hashlib.sha256(message).digest(),
+    )
+    monkeypatch.setattr(
+        "oidc.jwt_handler.MLDSA65.verify",
+        lambda _pk, message, signature: signature == hashlib.sha256(message).digest(),
+    )
+>>>>>>> Stashed changes
 
 
-class TestAuthorizationCodeFlow(unittest.TestCase):
-	def test_authorization_code_flow(self):
-		endpoint = AuthorizationEndpoint()
-
-		result = endpoint.handle_authorize_request(
-			client_id="client123",
-			redirect_uri="https://client.example/cb",
-			scope="openid profile email",
-			state="state123",
-			nonce="nonce123",
-			user_id="alice",
-		)
-
-		self.assertIn("code", result)
-		self.assertEqual(result["state"], "state123")
-
-		code_data = endpoint.validate_code(
-			result["code"],
-			client_id="client123",
-			redirect_uri="https://client.example/cb",
-		)
-		self.assertIsNotNone(code_data)
-		self.assertEqual(code_data["user_id"], "alice")
-		self.assertEqual(code_data["scope"], "openid profile email")
-		self.assertEqual(code_data["nonce"], "nonce123")
-
-		# One-time use
-		self.assertIsNone(
-			endpoint.validate_code(
-				result["code"],
-				client_id="client123",
-				redirect_uri="https://client.example/cb",
-			)
-		)
+def _pkce_challenge(verifier: str) -> str:
+    return base64url_encode(hashlib.sha256(verifier.encode("ascii")).digest())
 
 
-class TestTokenIssuance(unittest.TestCase):
-	def setUp(self):
-		sig = DilithiumSignature()
-		self.issuer_pk, self.issuer_sk = sig.generate_keypair()
-		self.client_pk, _ = sig.generate_keypair()
-
-		self.auth = AuthorizationEndpoint()
-		self.token_endpoint = TokenEndpoint(
-			issuer_url="https://issuer.example",
-			issuer_sk=self.issuer_sk,
-			issuer_pk=self.issuer_pk,
-		)
-
-	def _issue_code(self):
-		result = self.auth.handle_authorize_request(
-			client_id="client123",
-			redirect_uri="https://client.example/cb",
-			scope="openid profile email",
-			state="state123",
-			nonce="nonce123",
-			user_id="alice",
-		)
-		code = result["code"]
-		code_data = self.auth.validate_code(code, "client123", "https://client.example/cb")
-		return code, code_data
-
-	def test_token_issuance(self):
-		code, code_data = self._issue_code()
-		self.assertIsNotNone(code_data)
-
-		response = self.token_endpoint.handle_token_request(
-			grant_type="authorization_code",
-			code=code,
-			code_data=code_data,
-			client_ephemeral_pk=self.client_pk,
-			session_id="session-123",
-			session_key=b"\x02" * 32,
-		)
-
-		self.assertEqual(response["token_type"], "Bearer")
-		self.assertIn("access_token", response)
-		self.assertIn("id_token", response)
-		self.assertEqual(response["expires_in"], 3600)
-		self.assertIn("profile", response["scope"])
-		self.assertIn("email", response["scope"])
-
-	def test_jwt_structure(self):
-		code, code_data = self._issue_code()
-		response = self.token_endpoint.handle_token_request(
-			grant_type="authorization_code",
-			code=code,
-			code_data=code_data,
-			client_ephemeral_pk=self.client_pk,
-			session_id="session-123",
-			session_key=b"\x02" * 32,
-		)
-
-		id_token = response["id_token"]
-		parts = id_token.split(".")
-		self.assertEqual(len(parts), 3)
-
-		header = json.loads(base64url_decode(parts[0]))
-		self.assertEqual(header.get("alg"), "DILITHIUM3")
-		self.assertEqual(header.get("typ"), "JWT")
-		self.assertEqual(header.get("kid"), "server-signing-key")
-
-	def test_claims_inclusion(self):
-		code, code_data = self._issue_code()
-		response = self.token_endpoint.handle_token_request(
-			grant_type="authorization_code",
-			code=code,
-			code_data=code_data,
-			client_ephemeral_pk=self.client_pk,
-			session_id="session-123",
-			session_key=b"\x02" * 32,
-		)
-
-		jwt = PQJWT()
-		claims = jwt.verify_id_token(response["id_token"], self.issuer_pk)
-		self.assertEqual(claims["iss"], "https://issuer.example")
-		self.assertEqual(claims["sub"], "alice")
-		self.assertEqual(claims["aud"], "client123")
-		self.assertEqual(claims["nonce"], "nonce123")
-		self.assertEqual(claims["name"], "User alice")
-		self.assertEqual(claims["email"], "alice@example.com")
-		self.assertTrue(claims["email_verified"])
-		self.assertIn("cnf", claims)
-		self.assertIn("exp", claims)
-		self.assertGreater(claims["exp"], get_timestamp())
+def _build_stack():
+    issuer_public_key = b"P" * MLDSA65.PUBLIC_KEY_SIZE
+    registry = InMemoryClientRegistry(
+        {"client123": {"redirect_uris": ["https://client.example/cb"]}}
+    )
+    auth = AuthorizationEndpoint(client_registry=registry)
+    token = TokenEndpoint(
+        issuer_url="https://issuer.example",
+        issuer_sk=b"issuer-secret-key",
+        issuer_pk=issuer_public_key,
+        authorization_code_store=auth.code_store,
+        refresh_token_store=RefreshTokenStore(),
+        signing_kid="signing-key-1",
+    )
+    jwks = JWKSEndpoint({"signing-key-1": issuer_public_key})
+    discovery = DiscoveryEndpoint(
+        "https://issuer.example",
+        jwks_uri="https://issuer.example/jwks",
+        introspection_endpoint="https://issuer.example/introspect",
+    )
+    return auth, token, jwks, discovery
 
 
-if __name__ == "__main__":
-	unittest.main()
+def test_authorization_code_pkce_token_and_metadata_flow(monkeypatch):
+    _patch_signatures(monkeypatch)
+    auth, token_endpoint, jwks, discovery = _build_stack()
+    verifier = "super-secret-verifier"
+
+    auth_result = auth.handle_authorize_request(
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        scope="openid profile email",
+        state="state123",
+        nonce="nonce123",
+        user_id="alice",
+        code_challenge=_pkce_challenge(verifier),
+    )
+    assert "code" in auth_result
+
+    token_response = token_endpoint.handle_token_request(
+        grant_type="authorization_code",
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        code=auth_result["code"],
+        code_verifier=verifier,
+        session=DummySession(b"a" * 32, b"b" * 32),
+    )
+    assert set(token_response) >= {"id_token", "access_token", "refresh_token", "token_type"}
+
+    jwt = PQJWT()
+    id_header, id_claims = jwt.verify_jwt(
+        token_response["id_token"],
+        b"P" * MLDSA65.PUBLIC_KEY_SIZE,
+        expected_type=ID_TOKEN_TYPE,
+    )
+    access_header, access_claims = jwt.verify_jwt(
+        token_response["access_token"],
+        b"P" * MLDSA65.PUBLIC_KEY_SIZE,
+        expected_type=ACCESS_TOKEN_TYPE,
+    )
+    jwks_doc = jwks.get_jwks()
+    config = discovery.get_configuration()
+
+    assert id_claims["sub"] == "alice"
+    assert access_claims["client_id"] == "client123"
+    assert id_header["kid"] == access_header["kid"] == "signing-key-1"
+    assert any(key["kid"] == id_header["kid"] for key in jwks_doc["keys"])
+    assert config["jwks_uri"] == "https://issuer.example/jwks"
+    assert config["introspection_endpoint"] == "https://issuer.example/introspect"
+
+
+def test_refresh_rotation_preserves_clean_oidc_shape(monkeypatch):
+    _patch_signatures(monkeypatch)
+    auth, token_endpoint, _, _ = _build_stack()
+    verifier = "super-secret-verifier"
+
+    auth_result = auth.handle_authorize_request(
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        scope="openid",
+        state="state123",
+        user_id="alice",
+        code_challenge=_pkce_challenge(verifier),
+    )
+    initial = token_endpoint.handle_token_request(
+        grant_type="authorization_code",
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        code=auth_result["code"],
+        code_verifier=verifier,
+        session=DummySession(b"a" * 32, b"b" * 32),
+    )
+
+    refreshed = token_endpoint.handle_token_request(
+        grant_type="refresh_token",
+        client_id="client123",
+        refresh_token=initial["refresh_token"],
+        session=DummySession(b"c" * 32, b"b" * 32),
+    )
+
+    assert refreshed["token_type"] == "Bearer"
+    assert "id_token" not in refreshed
+    assert "access_token" in refreshed
+    assert "refresh_token" in refreshed
+    assert refreshed["scope"] == "openid"
+
+
+def test_discovery_advertises_the_supported_oidc_and_kemtls_capabilities():
+    _, _, _, discovery = _build_stack()
+    config = discovery.get_configuration()
+
+    assert config["response_types_supported"] == ["code"]
+    assert config["grant_types_supported"] == ["authorization_code", "refresh_token"]
+    assert config["kemtls_session_binding_supported"] is True
+    assert config["kemtls_modes_supported"] == ["baseline", "pdk", "auto"]
+
+
+def test_token_lifetimes_are_forward_moving(monkeypatch):
+    _patch_signatures(monkeypatch)
+    auth, token_endpoint, _, _ = _build_stack()
+    verifier = "super-secret-verifier"
+
+    auth_result = auth.handle_authorize_request(
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        scope="openid",
+        state="state123",
+        user_id="alice",
+        code_challenge=_pkce_challenge(verifier),
+    )
+    response = token_endpoint.handle_token_request(
+        grant_type="authorization_code",
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        code=auth_result["code"],
+        code_verifier=verifier,
+        session=DummySession(b"a" * 32, b"b" * 32),
+    )
+
+    claims = PQJWT().validate_access_token(
+        response["access_token"],
+        b"P" * MLDSA65.PUBLIC_KEY_SIZE,
+        issuer="https://issuer.example",
+        audience="client123",
+    )
+    assert claims["exp"] > claims["iat"]
+    assert claims["exp"] > int(time.time())

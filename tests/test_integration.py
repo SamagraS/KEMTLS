@@ -1,119 +1,197 @@
-"""Role: Integration tests for full flows.
+import hashlib
+from dataclasses import dataclass
 
-Tests:
-- Complete authentication flow
-- Multi-component interactions
-- Error handling
+from flask import Flask
 
-Ensures: System works end-to-end
-"""
-
-import json
-import os
-import sys
-import unittest
-
-
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
-SRC_DIR = os.path.join(ROOT_DIR, "src")
-if SRC_DIR not in sys.path:
-    sys.path.insert(0, SRC_DIR)
-
-
-from oidc.authorization import AuthorizationEndpoint
-from oidc.token import TokenEndpoint
-from oidc.jwt_handler import PQJWT
+from crypto.ml_dsa import MLDSA65
+from oidc.auth_endpoints import AuthorizationEndpoint, InMemoryClientRegistry
 from oidc.discovery import DiscoveryEndpoint
-from client.oidc_client import OIDCClient
-from servers.auth_server import AuthorizationServer
-from servers.resource_server import ResourceServer
-from pop.client import PoPClient
+from oidc.introspection_endpoints import IntrospectionEndpoint
+from oidc.jwks import JWKSEndpoint
+from oidc.refresh_store import RefreshTokenStore
+from oidc.token_endpoints import TokenEndpoint
+from oidc.userinfo_endpoints import UserInfoEndpoint
+from utils.encoding import base64url_encode
 
 
-class TestAuthenticationFlow(unittest.TestCase):
-    def setUp(self):
-        self.auth_server = AuthorizationServer("http://localhost:5000")
-        self.issuer_pk = self.auth_server.issuer_pk
-        self.issuer_sk = self.auth_server.issuer_sk
-
-    def test_complete_auth_flow(self):
-        # Authorization code issuance
-        auth_endpoint = self.auth_server.auth_endpoint
-        auth_result = auth_endpoint.handle_authorize_request(
-            client_id="client123",
-            redirect_uri="https://client.example/cb",
-            scope="openid profile email",
-            state="state123",
-            nonce="nonce123",
-            user_id="alice",
-        )
-        code = auth_result["code"]
-
-        # Token issuance
-        code_data = auth_endpoint.validate_code(code, "client123", "https://client.example/cb")
-        token_endpoint = TokenEndpoint(
-            issuer_url="https://issuer.example",
-            issuer_sk=self.issuer_sk,
-            issuer_pk=self.issuer_pk,
-        )
-        response = token_endpoint.handle_token_request(
-            grant_type="authorization_code",
-            code=code,
-            code_data=code_data,
-            client_ephemeral_pk=b"client-pk",
-            session_id="session-123",
-            session_key=b"\x02" * 32,
-        )
-
-        self.assertIn("id_token", response)
-        jwt = PQJWT()
-        claims = jwt.verify_id_token(response["id_token"], self.issuer_pk)
-        self.assertEqual(claims["sub"], "alice")
-
-    def test_multi_component_interaction(self):
-        # Discovery endpoint
-        discovery = DiscoveryEndpoint("https://issuer.example")
-        config = discovery.get_configuration()
-        self.assertTrue(config["kemtls_supported"])
-
-        # OIDC client uses PoP client internally
-        oidc_client = OIDCClient(
-            client_id="client123",
-            redirect_uri="https://client.example/cb",
-            auth_server_url="https://issuer.example",
-            client_ephemeral_sk=b"client-sk",
-        )
-        url = oidc_client.create_authorization_url()
-        self.assertIn("authorize", url)
-
-        # Resource server challenge
-        resource_server = ResourceServer(self.issuer_pk)
-        rs_client = resource_server.app.test_client()
-        resp = rs_client.get("/api/userinfo", headers={"Authorization": "Bearer token"})
-        self.assertIn(resp.status_code, (200, 401))
-
-    def test_error_handling(self):
-        auth_endpoint = self.auth_server.auth_endpoint
-        result = auth_endpoint.handle_authorize_request(
-            client_id="",
-            redirect_uri="",
-            scope="openid",
-            state="state123",
-        )
-        self.assertEqual(result.get("error"), "invalid_request")
-
-        # Unsupported grant type
-        token_endpoint = self.auth_server.token_endpoint
-        response = token_endpoint.handle_token_request(
-            grant_type="invalid",
-            code="code",
-            code_data={"user_id": "alice", "client_id": "client123"},
-            client_ephemeral_pk=b"client-pk",
-            session_id="session-123",
-            session_key=b"\x02" * 32,
-        )
-        self.assertEqual(response.get("error"), "unsupported_grant_type")
+@dataclass
+class DummySession:
+    session_binding_id: bytes
+    refresh_binding_id: bytes
+    handshake_mode: str = "baseline"
 
 
-if __name__ == "__main__":
-    unittest.main()
+def _patch_signatures(monkeypatch):
+    monkeypatch.setattr(
+        "oidc.jwt_handler.MLDSA65.sign",
+        lambda _sk, message: hashlib.sha256(message).digest(),
+    )
+    monkeypatch.setattr(
+        "oidc.jwt_handler.MLDSA65.verify",
+        lambda _pk, message, signature: signature == hashlib.sha256(message).digest(),
+    )
+
+
+def _pkce_challenge(verifier: str) -> str:
+    return base64url_encode(hashlib.sha256(verifier.encode("ascii")).digest())
+
+
+def _build_oidc_app():
+    app = Flask(__name__)
+    issuer_public_key = b"P" * MLDSA65.PUBLIC_KEY_SIZE
+    registry = InMemoryClientRegistry(
+        {"client123": {"redirect_uris": ["https://client.example/cb"]}}
+    )
+    auth = AuthorizationEndpoint(client_registry=registry)
+    token = TokenEndpoint(
+        issuer_url="https://issuer.example",
+        issuer_sk=b"issuer-secret-key",
+        issuer_pk=issuer_public_key,
+        authorization_code_store=auth.code_store,
+        refresh_token_store=RefreshTokenStore(),
+        signing_kid="signing-key-1",
+    )
+    discovery = DiscoveryEndpoint(
+        "https://issuer.example",
+        introspection_endpoint="https://issuer.example/introspect",
+    )
+    jwks = JWKSEndpoint({"signing-key-1": issuer_public_key})
+    introspection = IntrospectionEndpoint(
+        issuer_public_key,
+        issuer="https://issuer.example",
+        audience="client123",
+    )
+    userinfo = UserInfoEndpoint(
+        issuer_public_key,
+        issuer="https://issuer.example",
+        audience="client123",
+    )
+    return app, auth, token, discovery, jwks, introspection, userinfo
+
+
+def test_end_to_end_oidc_flow_across_modules(monkeypatch):
+    _patch_signatures(monkeypatch)
+    _, auth, token, discovery, jwks, introspection, userinfo = _build_oidc_app()
+    verifier = "flow-verifier"
+    session = DummySession(b"a" * 32, b"b" * 32)
+
+    auth_result = auth.handle_authorize_request(
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        scope="openid profile email",
+        state="state123",
+        nonce="nonce123",
+        user_id="alice",
+        code_challenge=_pkce_challenge(verifier),
+    )
+    token_response = token.handle_token_request(
+        grant_type="authorization_code",
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        code=auth_result["code"],
+        code_verifier=verifier,
+        session=session,
+    )
+
+    discovery_doc = discovery.get_configuration()
+    jwks_doc = jwks.get_jwks()
+    introspection_doc = introspection.introspect(
+        token_response["access_token"],
+        session=session,
+    )
+    userinfo_doc, status = userinfo.handle_userinfo_request(
+        token_response["access_token"],
+        session=session,
+    )
+
+    assert discovery_doc["issuer"] == "https://issuer.example"
+    assert any(key["kid"] == "signing-key-1" for key in jwks_doc["keys"])
+    assert introspection_doc["active"] is True
+    assert introspection_doc["binding_status"] is True
+    assert status == 200
+    assert userinfo_doc["sub"] == "alice"
+    assert userinfo_doc["email"] == "alice@example.com"
+
+
+def test_route_level_integration_with_session_resolution(monkeypatch):
+    _patch_signatures(monkeypatch)
+    app, auth, token, _, jwks, introspection, userinfo = _build_oidc_app()
+    jwks.register_routes(app)
+    introspection.register_routes(app)
+    userinfo.register_routes(app)
+
+    verifier = "flow-verifier"
+    session = DummySession(b"a" * 32, b"b" * 32)
+    auth_result = auth.handle_authorize_request(
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        scope="openid profile",
+        state="state123",
+        user_id="alice",
+        code_challenge=_pkce_challenge(verifier),
+    )
+    token_response = token.handle_token_request(
+        grant_type="authorization_code",
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        code=auth_result["code"],
+        code_verifier=verifier,
+        session=session,
+    )
+
+    client = app.test_client()
+    jwks_response = client.get("/jwks")
+    introspect_response = client.post(
+        "/introspect",
+        json={"token": token_response["access_token"]},
+        environ_overrides={"kemtls.session": session},
+    )
+    userinfo_response = client.get(
+        "/userinfo",
+        headers={"Authorization": f"Bearer {token_response['access_token']}"},
+        environ_overrides={"kemtls.session": session},
+    )
+
+    assert jwks_response.status_code == 200
+    assert introspect_response.status_code == 200
+    assert introspect_response.get_json()["active"] is True
+    assert userinfo_response.status_code == 200
+    assert userinfo_response.get_json()["sub"] == "alice"
+
+
+def test_cross_module_fail_closed_behavior(monkeypatch):
+    _patch_signatures(monkeypatch)
+    _, auth, token, _, _, introspection, userinfo = _build_oidc_app()
+    verifier = "flow-verifier"
+    session = DummySession(b"a" * 32, b"b" * 32)
+
+    auth_result = auth.handle_authorize_request(
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        scope="openid",
+        state="state123",
+        user_id="alice",
+        code_challenge=_pkce_challenge(verifier),
+    )
+    token_response = token.handle_token_request(
+        grant_type="authorization_code",
+        client_id="client123",
+        redirect_uri="https://client.example/cb",
+        code=auth_result["code"],
+        code_verifier=verifier,
+        session=session,
+    )
+
+    bad_introspection = introspection.introspect(
+        token_response["access_token"],
+        session=DummySession(b"z" * 32, b"b" * 32),
+    )
+    bad_userinfo, status = userinfo.handle_userinfo_request(
+        token_response["access_token"],
+        session=DummySession(b"z" * 32, b"b" * 32),
+    )
+
+    assert bad_introspection["active"] is False
+    assert bad_introspection["binding_status"] is False
+    assert status == 401
+    assert bad_userinfo["error"] == "binding_mismatch"

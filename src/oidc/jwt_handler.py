@@ -1,155 +1,184 @@
-"""
-Post-Quantum JWT Handler
+"""JWT/JWS handling for the updated OIDC layer."""
 
-Creates and verifies JSON Web Tokens using Dilithium3 signatures.
-Implements proof-of-possession binding by embedding client public keys in tokens.
-"""
+from __future__ import annotations
 
-import json
 import time
-from typing import Dict, Any, Optional
-from crypto.ml_dsa import DilithiumSignature
-from utils.encoding import base64url_encode, base64url_decode
-from utils.helpers import create_jwk_from_dilithium_pubkey, extract_pubkey_from_jwk, get_timestamp
+from typing import Any, Dict, Optional, Tuple
+
+from crypto.ml_dsa import MLDSA65
+from utils.encoding import base64url_decode, base64url_encode
+from utils.serialization import deserialize_message, serialize_message
+
+
+ID_TOKEN_TYPE = "JWT"
+ACCESS_TOKEN_TYPE = "at+jwt"
+DEFAULT_KID = "signing-key-1"
 
 
 class PQJWT:
-    """
-    Post-Quantum JSON Web Token Handler
-    
-    Creates and verifies JWTs using Dilithium3 digital signatures.
-    Supports proof-of-possession token binding.
-    """
-    
-    def __init__(self):
-        """Initialize JWT handler."""
-        self.sig = DilithiumSignature()
-    
+    """Signs and validates standard-shaped JWTs with ML-DSA-65."""
+
+    def sign_jwt(
+        self,
+        claims: Dict[str, Any],
+        issuer_sk: bytes,
+        kid: str = DEFAULT_KID,
+        token_type: str = ID_TOKEN_TYPE,
+        extra_headers: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        if not isinstance(claims, dict):
+            raise TypeError("claims must be a dictionary")
+        if not isinstance(kid, str) or not kid:
+            raise ValueError("kid must be a non-empty string")
+        if not isinstance(token_type, str) or not token_type:
+            raise ValueError("token_type must be a non-empty string")
+
+        header = {
+            "alg": MLDSA65.ALGORITHM,
+            "typ": token_type,
+            "kid": kid,
+        }
+        if extra_headers:
+            if not isinstance(extra_headers, dict):
+                raise TypeError("extra_headers must be a dictionary when provided")
+            if any(name in extra_headers for name in ("alg", "typ", "kid")):
+                raise ValueError("extra_headers must not override alg, typ, or kid")
+            header.update(extra_headers)
+
+        header_b64 = base64url_encode(serialize_message(header))
+        payload_b64 = base64url_encode(serialize_message(claims))
+        signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
+        signature = MLDSA65.sign(issuer_sk, signing_input)
+        return f"{header_b64}.{payload_b64}.{base64url_encode(signature)}"
+
+    def verify_jwt(
+        self,
+        token: str,
+        issuer_pk: bytes,
+        expected_type: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        if not isinstance(token, str):
+            raise TypeError("token must be a string")
+
+        parts = token.split(".")
+        if len(parts) != 3:
+            raise ValueError("invalid JWT format")
+
+        header_b64, payload_b64, signature_b64 = parts
+        header = deserialize_message(base64url_decode(header_b64))
+        payload = deserialize_message(base64url_decode(payload_b64))
+        if not isinstance(header, dict):
+            raise ValueError("JWT header must decode to an object")
+        if not isinstance(payload, dict):
+            raise ValueError("JWT payload must decode to an object")
+
+        if header.get("alg") != MLDSA65.ALGORITHM:
+            raise ValueError(f"unsupported JWT algorithm: {header.get('alg')}")
+        if expected_type and header.get("typ") != expected_type:
+            raise ValueError(
+                f"unexpected JWT type: expected {expected_type}, got {header.get('typ')}"
+            )
+
+        signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
+        signature = base64url_decode(signature_b64)
+        if not MLDSA65.verify(issuer_pk, signing_input, signature):
+            raise ValueError("invalid JWT signature")
+
+        return header, payload
+
     def create_id_token(
         self,
         claims: Dict[str, Any],
         issuer_sk: bytes,
-        issuer_pk: bytes,
-        client_ephemeral_pk: Optional[bytes] = None,
-        session_key: Optional[bytes] = None,
-        session_id: Optional[str] = None
+        issuer_pk: Optional[bytes] = None,
+        kid: str = DEFAULT_KID,
+        **_: Any,
     ) -> str:
-        """
-        Create an ID token (JWT) signed with Dilithium3.
-        
-        Args:
-            claims: Token payload claims
-            issuer_sk: Issuer's Dilithium secret key
-            issuer_pk: Issuer's Dilithium public key
-            client_ephemeral_pk: Client's ephemeral public key for PoP binding
-            session_key: KEMTLS session key
-            session_id: KEMTLS session ID
-        
-        Returns:
-            str: Complete JWT (header.payload.signature)
-        """
-        # Create header
-        header = {
-            'alg': 'DILITHIUM3',
-            'typ': 'JWT',
-            'kid': 'server-signing-key'
-        }
-        
-        # Add PoP confirmation claim if client key provided
-        if client_ephemeral_pk:
-            claims['cnf'] = {
-                'jwk': create_jwk_from_dilithium_pubkey(
-                    client_ephemeral_pk,
-                    kid='client-ephemeral'
-                )
-            }
-            if session_id:
-                claims['cnf']['session_id'] = session_id
-            if 'exp' in claims:
-                # Session binding expires earlier than token
-                claims['cnf']['session_exp'] = min(
-                    claims.get('exp', get_timestamp() + 3600),
-                    get_timestamp() + 600  # 10 minutes
-                )
-        
-        # Encode header and payload
-        header_b64 = base64url_encode(json.dumps(header).encode())
-        payload_b64 = base64url_encode(json.dumps(claims).encode())
-        
-        # Create signing input
-        signing_input = f"{header_b64}.{payload_b64}".encode()
-        
-        # Sign with Dilithium
-        signature = self.sig.sign(issuer_sk, signing_input)
-        signature_b64 = base64url_encode(signature)
-        
-        # Return complete JWT
-        return f"{header_b64}.{payload_b64}.{signature_b64}"
-    
-    def verify_id_token(self, token: str, issuer_pk: bytes) -> Dict[str, Any]:
-        """
-        Verify a JWT and return its claims.
-        
-        Args:
-            token: JWT string
-            issuer_pk: Issuer's Dilithium public key
-        
-        Returns:
-            dict: Verified claims
-        
-        Raises:
-            ValueError: If token is invalid
-        """
-        # Split token
-        parts = token.split('.')
-        if len(parts) != 3:
-            raise ValueError("Invalid JWT format")
-        
-        header_b64, payload_b64, signature_b64 = parts
-        
-        # Decode header
-        header = json.loads(base64url_decode(header_b64))
-        if header.get('alg') != 'DILITHIUM3':
-            raise ValueError(f"Unsupported algorithm: {header.get('alg')}")
-        
-        # Verify signature
-        signing_input = f"{header_b64}.{payload_b64}".encode()
-        signature = base64url_decode(signature_b64)
-        
-        if not self.sig.verify(issuer_pk, signing_input, signature):
-            raise ValueError("Invalid signature")
-        
-        # Decode payload
-        claims = json.loads(base64url_decode(payload_b64))
-        
-        # Check expiration
-        if 'exp' in claims and get_timestamp() >= claims['exp']:
-            raise ValueError("Token expired")
-        
+        return self.sign_jwt(claims, issuer_sk, kid=kid, token_type=ID_TOKEN_TYPE)
+
+    def create_access_token(
+        self,
+        claims: Dict[str, Any],
+        issuer_sk: bytes,
+        kid: str = DEFAULT_KID,
+        cnf_claim: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        token_claims = dict(claims)
+        if cnf_claim is not None:
+            if not isinstance(cnf_claim, dict):
+                raise TypeError("cnf_claim must be a dictionary when provided")
+            if set(cnf_claim) != {"cnf"}:
+                raise ValueError("cnf_claim must only contain the 'cnf' field")
+            token_claims.update(cnf_claim)
+        return self.sign_jwt(token_claims, issuer_sk, kid=kid, token_type=ACCESS_TOKEN_TYPE)
+
+    def validate_id_token(
+        self,
+        token: str,
+        issuer_pk: bytes,
+        issuer: Optional[str] = None,
+        audience: Optional[str] = None,
+        nonce: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        _, claims = self.verify_jwt(token, issuer_pk, expected_type=ID_TOKEN_TYPE)
+        self._validate_registered_claims(claims, issuer=issuer, audience=audience)
+        if nonce is not None and claims.get("nonce") != nonce:
+            raise ValueError("nonce mismatch")
         return claims
-    
-    def extract_client_pubkey_from_token(self, token: str) -> Optional[bytes]:
-        """
-        Extract client's ephemeral public key from token (without verification).
-        
-        Args:
-            token: JWT string
-        
-        Returns:
-            bytes: Client's ephemeral public key, or None
-        """
+
+    def validate_access_token(
+        self,
+        token: str,
+        issuer_pk: bytes,
+        issuer: Optional[str] = None,
+        audience: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        _, claims = self.verify_jwt(token, issuer_pk, expected_type=ACCESS_TOKEN_TYPE)
+        self._validate_registered_claims(claims, issuer=issuer, audience=audience)
+        return claims
+
+    def verify_id_token(
+        self,
+        token: str,
+        issuer_pk: bytes,
+        issuer: Optional[str] = None,
+        audience: Optional[str] = None,
+        nonce: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return self.validate_id_token(
+            token,
+            issuer_pk,
+            issuer=issuer,
+            audience=audience,
+            nonce=nonce,
+        )
+
+    def extract_confirmation_claim(self, token: str) -> Optional[Dict[str, Any]]:
         try:
-            # Split and decode payload
-            parts = token.split('.')
+            parts = token.split(".")
             if len(parts) != 3:
                 return None
-            
-            payload = json.loads(base64url_decode(parts[1]))
-            
-            # Extract from cnf claim
-            if 'cnf' in payload and 'jwk' in payload['cnf']:
-                return extract_pubkey_from_jwk(payload['cnf']['jwk'])
-            
+            payload = deserialize_message(base64url_decode(parts[1]))
+            cnf = payload.get("cnf")
+            return cnf if isinstance(cnf, dict) else None
+        except Exception:
             return None
-        except:
-            return None
+
+    def _validate_registered_claims(
+        self,
+        claims: Dict[str, Any],
+        issuer: Optional[str],
+        audience: Optional[str],
+    ) -> None:
+        now = int(time.time())
+        if "exp" in claims and now >= int(claims["exp"]):
+            raise ValueError("token expired")
+        if "nbf" in claims and now < int(claims["nbf"]):
+            raise ValueError("token not yet valid")
+        if issuer is not None and claims.get("iss") != issuer:
+            raise ValueError("issuer mismatch")
+        if audience is not None and claims.get("aud") != audience:
+            raise ValueError("audience mismatch")
+
+
+__all__ = ["ACCESS_TOKEN_TYPE", "DEFAULT_KID", "ID_TOKEN_TYPE", "PQJWT"]

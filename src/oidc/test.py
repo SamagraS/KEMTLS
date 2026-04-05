@@ -1,93 +1,41 @@
-"""Virtual sandbox test for OIDC package.
+"""Standalone smoke test for the current OIDC package shape."""
 
-Uses dummy values and a fake JWT handler to avoid dependencies on crypto/utils tests.
-Run directly to validate basic behavior of all OIDC modules.
-"""
+from __future__ import annotations
 
+import hashlib
 import os
 import sys
-import importlib.util
-import types
-from typing import Any, Dict
 
 
 CURRENT_DIR = os.path.dirname(__file__)
 SRC_DIR = os.path.dirname(CURRENT_DIR)
-
-# Avoid stdlib `token` shadowing when running as a script from src/oidc
 if sys.path and sys.path[0] == CURRENT_DIR:
     sys.path.pop(0)
-
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
+from dataclasses import dataclass
 
-def _load_module(module_name: str, file_path: str) -> types.ModuleType:
-    spec = importlib.util.spec_from_file_location(module_name, file_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Unable to load module: {module_name}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-class _FakeJWT:
-    """Minimal JWT handler replacement for sandbox testing."""
-
-    def __init__(self):
-        self.last_claims: Dict[str, Any] | None = None
-
-    def create_id_token(
-        self,
-        claims: Dict[str, Any],
-        issuer_sk: bytes,
-        issuer_pk: bytes,
-        client_ephemeral_pk: bytes | None = None,
-        session_key: bytes | None = None,
-        session_id: str | None = None,
-    ) -> str:
-        self.last_claims = dict(claims)
-        if client_ephemeral_pk:
-            self.last_claims["_pop_bound"] = True
-        if session_id:
-            self.last_claims["_session_id"] = session_id
-        return "dummy.jwt.token"
+from oidc.auth_endpoints import AuthorizationEndpoint, InMemoryClientRegistry
+from crypto.ml_dsa import MLDSA65
+from oidc.discovery import DiscoveryEndpoint
+from oidc.introspection_endpoints import IntrospectionEndpoint
+from oidc.jwks import JWKSEndpoint
+from oidc.refresh_store import RefreshTokenStore
+from oidc.token_endpoints import TokenEndpoint
+from oidc.userinfo_endpoints import UserInfoEndpoint
+from utils.encoding import base64url_encode
 
 
-def _prepare_oidc_modules():
-    oidc_dir = CURRENT_DIR
+@dataclass
+class _Session:
+    session_binding_id: bytes
+    refresh_binding_id: bytes
+    handshake_mode: str = "baseline"
 
-    oidc_pkg = types.ModuleType("oidc")
-    oidc_pkg.__path__ = [oidc_dir]
-    sys.modules["oidc"] = oidc_pkg
 
-    jwt_handler = types.ModuleType("oidc.jwt_handler")
-
-    class PQJWT:  # noqa: N801 - keep class name to match production
-        def __init__(self):
-            self._impl = _FakeJWT()
-
-        def create_id_token(self, *args, **kwargs):
-            return self._impl.create_id_token(*args, **kwargs)
-
-        @property
-        def last_claims(self):
-            return self._impl.last_claims
-
-    jwt_handler.PQJWT = PQJWT
-    sys.modules["oidc.jwt_handler"] = jwt_handler
-
-    authorization = _load_module(
-        "oidc.authorization", os.path.join(oidc_dir, "authorization.py")
-    )
-    claims = _load_module("oidc.claims", os.path.join(oidc_dir, "claims.py"))
-    discovery = _load_module(
-        "oidc.discovery", os.path.join(oidc_dir, "discovery.py")
-    )
-    token = _load_module("oidc.token", os.path.join(oidc_dir, "token.py"))
-
-    return authorization, claims, discovery, token
+def _pkce_challenge(verifier: str) -> str:
+    return base64url_encode(hashlib.sha256(verifier.encode("ascii")).digest())
 
 
 def _assert(condition: bool, message: str) -> None:
@@ -96,85 +44,113 @@ def _assert(condition: bool, message: str) -> None:
 
 
 def run_sandbox() -> None:
-    """Run sandbox checks for all OIDC modules with dummy values."""
+    print("[sandbox] patching ML-DSA backend")
+    from oidc import jwt_handler as jwt_handler_module
 
-    print("[sandbox] loading oidc modules")
-    authorization_mod, claims_mod, discovery_mod, token_mod = _prepare_oidc_modules()
-    AuthorizationEndpoint = authorization_mod.AuthorizationEndpoint
-    ClaimsProcessor = claims_mod.ClaimsProcessor
-    DiscoveryEndpoint = discovery_mod.DiscoveryEndpoint
-    TokenEndpoint = token_mod.TokenEndpoint
-
-    # Authorization endpoint
-    print("[authorization] init AuthorizationEndpoint")
-    auth = AuthorizationEndpoint()
-    print("[authorization] handle_authorize_request: invalid_request")
-    bad = auth.handle_authorize_request("", "https://client/cb", "openid", "s")
-    _assert(bad == {"error": "invalid_request"}, "invalid_request expected")
-
-    print("[authorization] handle_authorize_request: auth_required")
-    auth_required = auth.handle_authorize_request(
-        "client123", "https://client/cb", "openid", "s"
+    original_sign = jwt_handler_module.MLDSA65.sign
+    original_verify = jwt_handler_module.MLDSA65.verify
+    jwt_handler_module.MLDSA65.sign = classmethod(
+        lambda cls, _sk, message: hashlib.sha256(message).digest()
     )
-    _assert(auth_required == {"auth_required": True}, "auth_required expected")
-
-    print("[authorization] handle_authorize_request: issue code")
-    ok = auth.handle_authorize_request(
-        "client123",
-        "https://client/cb",
-        "openid profile email",
-        "s",
-        nonce="n",
-        user_id="alice",
-    )
-    _assert("code" in ok, "authorization code missing")
-    print("[authorization] validate_code")
-    code_data = auth.validate_code(ok["code"], "client123", "https://client/cb")
-    _assert(code_data is not None, "code validation failed")
-
-    # Claims processing
-    print("[claims] get_user_claims")
-    claims = ClaimsProcessor().get_user_claims("alice", ["profile", "email"])
-    _assert(claims["sub"] == "alice", "claims sub mismatch")
-    _assert(claims["name"] == "Alice", "claims name mismatch")
-    _assert(claims["email"] == "alice@example.com", "claims email mismatch")
-
-    # Discovery endpoint
-    print("[discovery] init DiscoveryEndpoint")
-    issuer = "https://issuer.example"
-    discovery = DiscoveryEndpoint(issuer)
-    print("[discovery] get_configuration")
-    config = discovery.get_configuration()
-    _assert(config["issuer"] == issuer, "discovery issuer mismatch")
-    _assert(config["authorization_endpoint"].endswith("/authorize"), "missing auth endpoint")
-
-    # Token endpoint using fake JWT handler
-    print("[token] init TokenEndpoint")
-    token_ep = TokenEndpoint(issuer_url=issuer, issuer_sk=b"sk", issuer_pk=b"pk")
-
-    print("[token] handle_token_request")
-    token_response = token_ep.handle_token_request(
-        grant_type="authorization_code",
-        code="dummy-code",
-        code_data=code_data,
-        client_ephemeral_pk=b"client-pk",
-        session_id="session-1",
-        session_key=b"session-key",
+    jwt_handler_module.MLDSA65.verify = classmethod(
+        lambda cls, _pk, message, signature: signature == hashlib.sha256(message).digest()
     )
 
-    _assert(token_response["token_type"] == "Bearer", "token_type mismatch")
-    _assert(token_response["id_token"] == "dummy.jwt.token", "id_token mismatch")
-    _assert(token_response["access_token"] == "dummy.jwt.token", "access_token mismatch")
-    _assert("profile" in token_response["scope"], "scope missing profile")
-    _assert("email" in token_response["scope"], "scope missing email")
+    try:
+        registry = InMemoryClientRegistry(
+            {"client123": {"redirect_uris": ["https://client.example/cb"]}}
+        )
+        auth = AuthorizationEndpoint(client_registry=registry)
+        token = TokenEndpoint(
+            issuer_url="https://issuer.example",
+            issuer_sk=b"issuer-secret-key",
+            issuer_pk=b"P" * MLDSA65.PUBLIC_KEY_SIZE,
+            authorization_code_store=auth.code_store,
+            refresh_token_store=RefreshTokenStore(),
+            signing_kid="signing-key-1",
+        )
+        discovery = DiscoveryEndpoint(
+            "https://issuer.example",
+            introspection_endpoint="https://issuer.example/introspect",
+        )
+        jwks = JWKSEndpoint({"signing-key-1": b"P" * MLDSA65.PUBLIC_KEY_SIZE})
+        introspection = IntrospectionEndpoint(
+            b"P" * MLDSA65.PUBLIC_KEY_SIZE,
+            issuer="https://issuer.example",
+            audience="client123",
+        )
+        userinfo = UserInfoEndpoint(
+            b"P" * MLDSA65.PUBLIC_KEY_SIZE,
+            issuer="https://issuer.example",
+            audience="client123",
+        )
 
-    print("[token] validate generated claims (fake jwt handler)")
-    fake_claims = token_ep.jwt_handler.last_claims or {}
-    _assert(fake_claims.get("sub") == "alice", "token claims sub mismatch")
-    _assert(fake_claims.get("aud") == "client123", "token claims aud mismatch")
-    _assert(fake_claims.get("nonce") == "n", "token claims nonce mismatch")
+        verifier = "sandbox-verifier"
+        session = _Session(b"a" * 32, b"b" * 32)
 
-    print("✅ OIDC sandbox checks passed")
+        print("[authorization] issuing code")
+        auth_result = auth.handle_authorize_request(
+            client_id="client123",
+            redirect_uri="https://client.example/cb",
+            scope="openid profile email",
+            state="state123",
+            nonce="nonce123",
+            user_id="alice",
+            code_challenge=_pkce_challenge(verifier),
+        )
+        _assert("code" in auth_result, "authorization code missing")
+
+        print("[token] issuing tokens")
+        token_response = token.handle_token_request(
+            grant_type="authorization_code",
+            client_id="client123",
+            redirect_uri="https://client.example/cb",
+            code=auth_result["code"],
+            code_verifier=verifier,
+            session=session,
+        )
+        _assert("access_token" in token_response, "access_token missing")
+        _assert("id_token" in token_response, "id_token missing")
+        _assert("refresh_token" in token_response, "refresh_token missing")
+
+        print("[discovery] checking metadata")
+        metadata = discovery.get_configuration()
+        _assert(metadata["issuer"] == "https://issuer.example", "issuer mismatch")
+        _assert(metadata["jwks_uri"].endswith("/jwks"), "jwks_uri missing")
+
+        print("[jwks] checking published key")
+        jwks_doc = jwks.get_jwks()
+        _assert(any(key["kid"] == "signing-key-1" for key in jwks_doc["keys"]), "kid missing from jwks")
+
+        print("[userinfo] validating same-session access")
+        userinfo_payload, userinfo_status = userinfo.handle_userinfo_request(
+            token_response["access_token"],
+            session=session,
+        )
+        _assert(userinfo_status == 200, "userinfo should succeed on same session")
+        _assert(userinfo_payload["sub"] == "alice", "userinfo sub mismatch")
+
+        print("[introspection] validating replay rejection on different session")
+        introspection_payload = introspection.introspect(
+            token_response["access_token"],
+            session=_Session(b"z" * 32, b"b" * 32, "pdk"),
+        )
+        _assert(introspection_payload["active"] is False, "replayed token should be inactive")
+        _assert(introspection_payload["binding_status"] is False, "binding_status should be false")
+
+        print("[refresh] rotating refresh token")
+        refreshed = token.handle_token_request(
+            grant_type="refresh_token",
+            client_id="client123",
+            refresh_token=token_response["refresh_token"],
+            session=session,
+        )
+        _assert("refresh_token" in refreshed, "refresh rotation failed")
+
+        print("OIDC sandbox checks passed")
+    finally:
+        jwt_handler_module.MLDSA65.sign = original_sign
+        jwt_handler_module.MLDSA65.verify = original_verify
 
 
 if __name__ == "__main__":
