@@ -120,6 +120,7 @@ export default function Index() {
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalWidth, setTerminalWidth] = useState(380);
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const [waitingForClick, setWaitingForClick] = useState(false);
   const [currentStepIdx, setCurrentStepIdx] = useState(-1);
   const [isBackendConnected, setIsBackendConnected] = useState(false);
@@ -172,6 +173,7 @@ export default function Index() {
   }, []);
 
   const resetUiState = useCallback(() => {
+    dismissThreat();
     setFlowState('idle');
     setWaitingForClick(false);
     setCurrentStepIdx(-1);
@@ -179,7 +181,8 @@ export default function Index() {
     setSteps(INITIAL_STEPS);
     setLogs([]);
     setElapsed(0);
-  }, []);
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+  }, [dismissThreat]);
 
   const applySnapshot = useCallback((snapshot: {
     hasActiveRun: boolean;
@@ -287,6 +290,7 @@ export default function Index() {
 
     socket.on('step_flow_started', (data: { runId?: string }) => {
       if (data.runId) setCurrentRunId(data.runId);
+      dismissThreat();
       setFlowState('running');
       setElapsed(0);
       setLogs([]);
@@ -381,7 +385,7 @@ export default function Index() {
     return () => {
       socket.disconnect();
     };
-  }, [addLog, applySnapshot, resetUiState]);
+  }, [addLog, applySnapshot, resetUiState, dismissThreat]);
 
   /* ────── Terminal resize drag handler ────── */
   const handleTerminalDragStart = useCallback((e: React.MouseEvent) => {
@@ -435,19 +439,42 @@ export default function Index() {
   }, [flowState, addLog, isBackendConnected]);
 
   /* ────── Handle node click (for step mode resume) ────── */
-  const handleNodeClick = useCallback((stepId: string) => {
-    if (runMode === 'step' && waitingForClick) {
-      const nextIdx = currentStepIdx + 1;
-      if (
-        nextIdx < INITIAL_STEPS.length
-        && INITIAL_STEPS[nextIdx].id === stepId
-        && BACKEND_STEP_IDS.includes(stepId as (typeof BACKEND_STEP_IDS)[number])
-      ) {
-        socketRef.current?.emit('continue_step_flow', { runId: currentRunId });
-      }
-    }
-    setSelectedStep(stepId);
+  const advanceStepFlow = useCallback((stepId?: string) => {
+    if (runMode !== 'step' || !waitingForClick) return;
+
+    const nextIdx = currentStepIdx + 1;
+    if (nextIdx >= INITIAL_STEPS.length) return;
+
+    const expectedNextStepId = INITIAL_STEPS[nextIdx].id;
+    if (stepId && expectedNextStepId !== stepId) return;
+    if (!BACKEND_STEP_IDS.includes(expectedNextStepId as (typeof BACKEND_STEP_IDS)[number])) return;
+
+    socketRef.current?.emit('continue_step_flow', { runId: currentRunId });
   }, [runMode, waitingForClick, currentStepIdx, currentRunId]);
+
+  const handleNodeClick = useCallback((stepId: string) => {
+    advanceStepFlow(stepId);
+    setSelectedStep(stepId);
+  }, [advanceStepFlow]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space') return;
+
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const isTypingTarget = tag === 'input' || tag === 'textarea' || target?.isContentEditable;
+      if (isTypingTarget) return;
+
+      if (runMode === 'step' && waitingForClick && flowState === 'paused') {
+        event.preventDefault();
+        advanceStepFlow();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [runMode, waitingForClick, flowState, advanceStepFlow]);
 
   const startFlow = useCallback(() => {
     if (runMode === 'full') {
@@ -508,7 +535,12 @@ export default function Index() {
           ]).map(m => (
             <button
               key={m.key}
-              onClick={() => { if (flowState === 'idle') setRunMode(m.key); }}
+              onClick={() => {
+                if (flowState === 'idle') {
+                  dismissThreat();
+                  setRunMode(m.key);
+                }
+              }}
               data-hover
               className="px-4 py-1.5 text-xs font-display font-semibold tracking-wider transition-all duration-200"
               style={{
@@ -576,6 +608,21 @@ export default function Index() {
         </div>
 
         {/* Terminal toggle */}
+        {runMode === 'step' && (
+          <button
+            onClick={() => setDetailsOpen(!detailsOpen)}
+            data-hover
+            className="ml-3 px-3 py-1.5 text-xs font-display font-semibold tracking-wider rounded-lg transition-all duration-200"
+            style={{
+              background: detailsOpen ? 'rgba(0,229,255,0.1)' : 'transparent',
+              border: `1px solid ${detailsOpen ? 'var(--cyan)' : 'rgba(0,229,255,0.15)'}`,
+              color: detailsOpen ? 'var(--cyan)' : 'var(--text-dim)',
+            }}
+          >
+            {detailsOpen ? '✕ DETAILS' : 'ⓘ DETAILS'}
+          </button>
+        )}
+
         <button
           onClick={() => setTerminalOpen(!terminalOpen)}
           data-hover
@@ -615,7 +662,7 @@ export default function Index() {
         </div>
 
         {/* ─── RIGHT: Step Explanation (in step mode when step selected & done) ─── */}
-        {runMode === 'step' && activeStepObj && activeStepObj.status === 'done' && flowState === 'paused' && (
+        {runMode === 'step' && detailsOpen && activeStepObj && activeStepObj.status === 'done' && (flowState === 'paused' || flowState === 'done') && (
           <div className="w-[380px] flex-shrink-0 flex flex-col overflow-y-auto" style={{
             borderLeft: '1px solid rgba(0,229,255,0.08)',
             background: 'rgba(6, 13, 31, 0.85)',
@@ -715,7 +762,7 @@ export default function Index() {
           <>
             <span style={{ color: 'var(--text-dim)' }}>│</span>
             <span style={{ color: 'var(--magenta)', animation: 'pulse-glow 1.5s ease infinite' }}>
-              CLICK NEXT STEP TO CONTINUE
+              PRESS SPACE OR CLICK NEXT STEP TO CONTINUE
             </span>
           </>
         )}
@@ -959,7 +1006,9 @@ function VerticalFlowVisualizer({ steps, selectedStep, flowState, runMode, waiti
 
                     {/* Threat tooltip — Left for all except the first ('hello') node */}
                     {hasThreat && activeThreat && (() => {
-                      const showOnLeft = step.id !== 'hello';
+                      // Keep tooltip in view: prefer right side for earlier nodes and
+                      // left side only when we are far enough into the flow.
+                      const showOnLeft = globalIdx >= 3;
                       const arrowColor = activeThreat.severity === 'critical' ? 'rgba(212,92,110,0.5)' : activeThreat.severity === 'high' ? 'rgba(212,140,92,0.5)' : 'rgba(212,165,92,0.5)';
 
                       return (
@@ -970,7 +1019,7 @@ function VerticalFlowVisualizer({ steps, selectedStep, flowState, runMode, waiti
                             ? { right: '100%', marginRight: '16px' }
                             : { left: '100%', marginLeft: '16px' }),
                           transform: 'translateY(-50%)',
-                          width: '320px',
+                          width: 'min(320px, calc(100vw - 40px))',
                           zIndex: 50,
                           animation: showOnLeft ? 'slideInLeft 0.3s ease' : 'slideInRight 0.3s ease',
                           pointerEvents: 'auto',

@@ -384,32 +384,17 @@ export function ThreatPopup({ threat, onClose }: ThreatPopupProps) {
    ═══════════════════════════════════════════ */
 export function useThreatPopups() {
   const [activeThreat, setActiveThreat] = useState<ThreatInfo | null>(null);
-  const [queue, setQueue] = useState<ThreatInfo[]>([]);
 
   const triggerThreat = useCallback((stepId: string) => {
     const threat = THREATS.find(t => t.stepId === stepId);
-    if (threat) {
-      if (activeThreat) {
-        setQueue(prev => [...prev, threat]);
-      } else {
-        setActiveThreat(threat);
-      }
-    }
-  }, [activeThreat]);
+    if (!threat) return;
+
+    // Always sync popup to the current step threat immediately.
+    setActiveThreat(prev => (prev?.id === threat.id ? prev : threat));
+  }, []);
 
   const dismissThreat = useCallback(() => {
     setActiveThreat(null);
-    // Process queue after a brief pause
-    setTimeout(() => {
-      setQueue(prev => {
-        if (prev.length > 0) {
-          const [next, ...rest] = prev;
-          setActiveThreat(next);
-          return rest;
-        }
-        return prev;
-      });
-    }, 400);
   }, []);
 
   return { activeThreat, triggerThreat, dismissThreat };
