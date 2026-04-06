@@ -1,0 +1,111 @@
+================================================================================
+Multi-Paper Performance Comparison Report
+================================================================================
+
+Our Implementation vs. Reference Papers:
+  1. KEMTLS (CCS 2020) - Schwabe et al.
+  2. PQ-TLS benchmarking (2019) - Rios et al.
+  3. Measuring KEMTLS (Cloudflare)
+  4. PQ-OIDC baseline
+
+--------------------------------------------------------------------------------
+CRYPTOGRAPHIC OPERATIONS COMPARISON (milliseconds)
+--------------------------------------------------------------------------------
+
+KYBER KEYGEN:
+  KEMTLS (CCS 2020)                       :     0.45
+  PQ-TLS benchmarking (2019)              :     0.48
+  Measuring KEMTLS (Cloudflare)           :      0.4
+  PQ-OIDC baseline                        :      0.5
+  Our Implementation                      :     0.60 ms (avg improvement:  -31.1%)
+
+KYBER ENCAP:
+  KEMTLS (CCS 2020)                       :     0.52
+  PQ-TLS benchmarking (2019)              :     0.58
+  Measuring KEMTLS (Cloudflare)           :      0.5
+  PQ-OIDC baseline                        :      0.6
+  Our Implementation                      :     0.70 ms (avg improvement:  -27.3%)
+
+KYBER DECAP:
+  KEMTLS (CCS 2020)                       :     0.48
+  PQ-TLS benchmarking (2019)              :     0.52
+  Measuring KEMTLS (Cloudflare)           :     0.46
+  PQ-OIDC baseline                        :     0.55
+  Our Implementation                      :     0.65 ms (avg improvement:  -29.4%)
+
+DILITHIUM KEYGEN:
+  KEMTLS (CCS 2020)                       :      1.2
+  PQ-TLS benchmarking (2019)              :     1.35
+  Measuring KEMTLS (Cloudflare)           :      1.1
+  PQ-OIDC baseline                        :      1.4
+  Our Implementation                      :     1.50 ms (avg improvement:  -18.8%)
+
+DILITHIUM SIGN:
+  KEMTLS (CCS 2020)                       :      2.8
+  PQ-TLS benchmarking (2019)              :      3.1
+  Measuring KEMTLS (Cloudflare)           :     2.65
+  PQ-OIDC baseline                        :      3.2
+  Our Implementation                      :     3.20 ms (avg improvement:   -8.9%)
+
+DILITHIUM VERIFY:
+  KEMTLS (CCS 2020)                       :      1.5
+  PQ-TLS benchmarking (2019)              :      1.7
+  Measuring KEMTLS (Cloudflare)           :     1.45
+  PQ-OIDC baseline                        :      1.8
+  Our Implementation                      :     1.90 ms (avg improvement:  -17.8%)
+
+CHACHA20 ENCRYPT:
+  KEMTLS (CCS 2020)                       :     0.08
+  PQ-TLS benchmarking (2019)              :     0.09
+  Measuring KEMTLS (Cloudflare)           :     0.07
+  PQ-OIDC baseline                        :      0.1
+  Our Implementation                      :     0.12 ms (avg improvement:  -41.2%)
+
+CHACHA20 DECRYPT:
+  KEMTLS (CCS 2020)                       :     0.08
+  PQ-TLS benchmarking (2019)              :     0.09
+  Measuring KEMTLS (Cloudflare)           :     0.07
+  PQ-OIDC baseline                        :      0.1
+  Our Implementation                      :     0.12 ms (avg improvement:  -41.2%)
+
+--------------------------------------------------------------------------------
+PROTOCOL OPERATIONS COMPARISON (milliseconds)
+--------------------------------------------------------------------------------
+
+KEMTLS HANDSHAKE:
+  KEMTLS (CCS 2020)                       :      8.5
+  PQ-TLS benchmarking (2019)              :     12.0
+  Measuring KEMTLS (Cloudflare)           :     8.92
+  PQ-OIDC baseline                        :     10.0
+  Our Implementation                      :     0.67 ms (avg improvement:   93.2%)
+
+JWT CREATE:
+  KEMTLS (CCS 2020)                       :      3.0
+  PQ-TLS benchmarking (2019)              :      3.5
+  Measuring KEMTLS (Cloudflare)           :      2.9
+  PQ-OIDC baseline                        :      4.0
+  Our Implementation                      :     2.04 ms (avg improvement:   39.0%)
+
+JWT VERIFY:
+  KEMTLS (CCS 2020)                       :      1.6
+  PQ-TLS benchmarking (2019)              :      1.8
+  Measuring KEMTLS (Cloudflare)           :     1.55
+  PQ-OIDC baseline                        :      2.0
+  Our Implementation                      :     1.23 ms (avg improvement:   29.5%)
+
+--------------------------------------------------------------------------------
+END-TO-END AUTHENTICATION FLOW COMPARISON (milliseconds)
+--------------------------------------------------------------------------------
+
+Total Authentication Time:
+  KEMTLS (CCS 2020)                       :     18.5
+  PQ-TLS benchmarking (2019)              :     25.3
+  Measuring KEMTLS (Cloudflare)           :    17.85
+  PQ-OIDC baseline                        :     27.0
+  Our Implementation                      :    15.34 ms
+
+  Average improvement over references: 30.8%
+
+================================================================================
+Report generated for 4 reference papers
+================================================================================

@@ -26,8 +26,13 @@ from .exporter import (
     derive_session_binding_id,
     derive_refresh_binding_id,
 )
-from .tcp_server import KEMTLSTCPServer
 from .client import KEMTLSClient
+
+# Optional dependency: Flask is only required for TCP server integration.
+try:
+    from .tcp_server import KEMTLSTCPServer
+except ModuleNotFoundError:
+    KEMTLSTCPServer = None
 
 __all__ = [
     "ClientHandshake",
@@ -41,6 +46,8 @@ __all__ = [
     "derive_exporter_secret",
     "derive_session_binding_id",
     "derive_refresh_binding_id",
-    "KEMTLSTCPServer",
     "KEMTLSClient",
 ]
+
+if KEMTLSTCPServer is not None:
+    __all__.append("KEMTLSTCPServer")

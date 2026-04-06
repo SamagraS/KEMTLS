@@ -6,8 +6,6 @@ Measures:
 - KEMTLS full handshake
 - ID token creation
 - ID token verification
-- PoP proof generation
-- PoP proof verification
 
 Output: JSON file with protocol timings
 """
@@ -29,8 +27,6 @@ from crypto.ml_kem import KyberKEM
 from crypto.ml_dsa import DilithiumSignature
 from kemtls.handshake import KEMTLSHandshake
 from oidc.jwt_handler import PQJWT
-from pop.client import PoPClient
-from pop.server import ProofOfPossession
 
 
 def benchmark_operation(operation_name: str, operation_func, iterations: int = 100) -> Dict[str, Any]:
@@ -174,49 +170,6 @@ def benchmark_jwt_operations(iterations: int = 100) -> Dict[str, Any]:
     }
 
 
-def benchmark_pop_operations(iterations: int = 100) -> Dict[str, Any]:
-    """Benchmark Proof-of-Possession operations"""
-    print("\n3. Proof-of-Possession (PoP) Benchmarks")
-    print("   " + "-" * 40)
-    
-    # Setup client and server
-    sig = DilithiumSignature()
-    client_eph_pk, client_eph_sk = sig.generate_keypair()
-    
-    pop_client = PoPClient(client_eph_sk)
-    pop_server = ProofOfPossession()
-    
-    # Pre-generate challenge and token
-    challenge = pop_server.generate_challenge()
-    access_token = "demo_access_token_" + "x" * 100
-    
-    # Benchmark PoP proof generation
-    generate_result = benchmark_operation(
-        "PoP Proof Generation",
-        lambda: pop_client.create_pop_proof(challenge, access_token),
-        iterations
-    )
-    
-    # Pre-generate proof for verification benchmark
-    proof = pop_client.create_pop_proof(challenge, access_token)
-    
-    # Benchmark PoP proof verification
-    verify_result = benchmark_operation(
-        "PoP Proof Verification",
-        lambda: pop_server.verify_pop_response(challenge, proof, client_eph_pk, access_token),
-        iterations
-    )
-    
-    return {
-        "protocol": "PoP",
-        "description": "Proof-of-Possession for token binding",
-        "operations": {
-            "generate_proof": generate_result,
-            "verify_proof": verify_result,
-        }
-    }
-
-
 def save_results_json(results: Dict[str, Any], output_file: str):
     """Save benchmark results to JSON file"""
     print(f"\nSaving results to {output_file}...")
@@ -231,7 +184,7 @@ def print_summary(results: Dict[str, Any]):
     print("Protocol Benchmark Summary")
     print("=" * 60)
     
-    for category in ["kemtls", "jwt", "pop"]:
+    for category in ["kemtls", "jwt"]:
         if category in results:
             data = results[category]
             print(f"\n{data['protocol']} ({data['description']}):")
@@ -252,8 +205,6 @@ def main():
                        help="Skip KEMTLS benchmarks")
     parser.add_argument("--skip-jwt", action="store_true",
                        help="Skip JWT benchmarks")
-    parser.add_argument("--skip-pop", action="store_true",
-                       help="Skip PoP benchmarks")
     args = parser.parse_args()
     
     print("=" * 60)
@@ -279,9 +230,6 @@ def main():
         if not args.skip_jwt:
             results["jwt"] = benchmark_jwt_operations(args.iterations)
         
-        if not args.skip_pop:
-            results["pop"] = benchmark_pop_operations(args.iterations)
-        
         # Save results
         output_path = os.path.join(ROOT_DIR, args.output)
         # Create results directory if it doesn't exist
@@ -300,7 +248,6 @@ def main():
         print("\nKey Insights:")
         print("  • KEMTLS handshake time = full PQ key exchange overhead")
         print("  • JWT operations = token issuance/validation cost")
-        print("  • PoP operations = token binding overhead per request")
         
     except Exception as e:
         print(f"\n[FAIL] Benchmark failed: {e}")

@@ -1,0 +1,7 @@
+{
+  "id_token_base_bytes": 4581,
+  "access_token_bound_bytes": 4665,
+  "binding_overhead_bytes": 84,
+  "jwks_size_bytes": 2673,
+  "oidc_metadata_size_bytes": 405
+}

@@ -42,8 +42,7 @@ REFERENCE_DATA = {
         "kemtls_handshake": 8.50,
         "jwt_create": 3.00,
         "jwt_verify": 1.60,
-        "pop_generate": 2.90,
-        "pop_verify": 3.20,
+
     },
     
     # End-to-end flow (milliseconds)
@@ -110,8 +109,7 @@ def extract_our_results(benchmark_data: Dict[str, Any]) -> Dict[str, Any]:
             "kemtls_handshake": protocol.get("kemtls", {}).get("operations", {}).get("full_handshake", {}).get("avg_ms", 0),
             "jwt_create": protocol.get("jwt", {}).get("operations", {}).get("create_token", {}).get("avg_ms", 0),
             "jwt_verify": protocol.get("jwt", {}).get("operations", {}).get("verify_token", {}).get("avg_ms", 0),
-            "pop_generate": protocol.get("pop", {}).get("operations", {}).get("generate_proof", {}).get("avg_ms", 0),
-            "pop_verify": protocol.get("pop", {}).get("operations", {}).get("verify_proof", {}).get("avg_ms", 0),
+
         }
     
     # Extract end-to-end results

@@ -24,8 +24,6 @@ from crypto.ml_kem import KyberKEM
 from crypto.ml_dsa import DilithiumSignature
 from kemtls.handshake import KEMTLSHandshake
 from oidc.jwt_handler import PQJWT
-from pop.client import PoPClient
-from pop.server import ProofOfPossession
 
 
 class AuthenticationFlowBenchmark:
@@ -43,7 +41,6 @@ class AuthenticationFlowBenchmark:
         
         # Initialize handlers
         self.jwt = PQJWT()
-        self.pop_server = ProofOfPossession()
         
         # Timing breakdown
         self.timings: Dict[str, float] = {}
@@ -75,25 +72,16 @@ class AuthenticationFlowBenchmark:
         phase3_time = (time.perf_counter() - phase3_start) * 1000
         self.timings["phase3_token_exchange"] = phase3_time
         
-        # Phase 4: Resource Access with PoP
-        phase4_start = time.perf_counter()
-        resource_granted = self._phase4_resource_access(
-            access_token, client_eph_pk, client_eph_sk
-        )
-        phase4_time = (time.perf_counter() - phase4_start) * 1000
-        self.timings["phase4_resource_access"] = phase4_time
-        
         total_time = (time.perf_counter() - total_start) * 1000
         self.timings["total"] = total_time
         
         return {
-            "success": resource_granted,
+            "success": True,
             "timings": self.timings,
             "phases": {
                 "phase1": {"name": "KEMTLS Handshake", "time_ms": phase1_time},
                 "phase2": {"name": "Authorization", "time_ms": phase2_time},
                 "phase3": {"name": "Token Exchange", "time_ms": phase3_time},
-                "phase4": {"name": "Resource Access (PoP)", "time_ms": phase4_time},
             }
         }
     
@@ -115,7 +103,7 @@ class AuthenticationFlowBenchmark:
         server_keys = server.server_process_client_key_exchange(client_kex)
         client_keys = client.get_session_keys()
         
-        # Generate client ephemeral keypair for PoP
+        # Generate client ephemeral keypair
         client_eph_pk_sig, client_eph_sk_sig = self.sig.generate_keypair()
         
         return client_keys, client_eph_pk_sig, client_eph_sk_sig
@@ -129,7 +117,7 @@ class AuthenticationFlowBenchmark:
     
     def _phase3_token_exchange(self, client_eph_pk):
         """Phase 3: Exchange authorization code for tokens"""
-        # Create ID token with PoP binding
+        # Create ID token
         claims = {
             "iss": "http://localhost:5000",
             "sub": "alice",
@@ -147,22 +135,6 @@ class AuthenticationFlowBenchmark:
         
         return id_token, access_token
     
-    def _phase4_resource_access(self, access_token, client_eph_pk, client_eph_sk):
-        """Phase 4: Access protected resource with PoP proof"""
-        # Resource server issues challenge
-        challenge = self.pop_server.generate_challenge()
-        
-        # Client creates PoP proof
-        pop_client = PoPClient(client_eph_sk)
-        proof = pop_client.create_pop_proof(challenge, access_token)
-        
-        # Resource server verifies PoP
-        is_valid = self.pop_server.verify_pop_response(
-            challenge, proof, client_eph_pk, access_token
-        )
-        
-        return is_valid
-
 
 def benchmark_operation(benchmark: AuthenticationFlowBenchmark, iterations: int = 100) -> Dict[str, Any]:
     """
@@ -277,7 +249,6 @@ def main():
     print("  1. KEMTLS Handshake (PQ key exchange)")
     print("  2. Authorization (user approval)")
     print("  3. Token Exchange (ID token + access token)")
-    print("  4. Resource Access (PoP verification)")
     print(f"\nConfiguration:")
     print(f"  • Iterations:  {args.iterations}")
     print(f"  • Output file: {args.output}")

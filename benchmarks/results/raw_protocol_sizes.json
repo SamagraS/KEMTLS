@@ -1,0 +1,7 @@
+{
+  "pqtls_bytes": 12000,
+  "kemtls_bytes": 11094,
+  "kemtls_pdk_bytes": 4959,
+  "savings_kemtls_vs_pqtls_percent": 7.55,
+  "savings_kemtls_pdk_vs_pqtls_percent": 58.67
+}

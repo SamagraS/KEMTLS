@@ -1,0 +1,7 @@
+{
+  "runs": 100,
+  "default_rtt_ms": 31,
+  "packet_loss_percent": 0.0,
+  "modes": ["pqtls", "kemtls", "kemtls_pdk"],
+  "results_dir": "results"
+}
