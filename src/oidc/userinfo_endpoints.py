@@ -9,6 +9,7 @@ from flask import g, jsonify, request
 from oidc.claims import ClaimsProcessor
 from oidc.jwt_handler import PQJWT
 from oidc.session_binding import verify_access_token_binding_claim
+from utils.telemetry import OIDCUserinfoCollector
 
 
 class UserInfoEndpoint:
@@ -33,30 +34,51 @@ class UserInfoEndpoint:
         self,
         access_token: str,
         session=None,
-    ) -> Tuple[Dict[str, Any], int]:
+    ) -> Tuple[Dict[str, Any], int, Dict[str, Any]]:
+        telemetry = OIDCUserinfoCollector()
+        telemetry.total_request_timer.start()
+        
         if not isinstance(access_token, str) or not access_token:
-            return {"error": "invalid_token"}, 401
+            telemetry.error_status = "invalid_token"
+            telemetry.total_request_timer.stop()
+            return {"error": "invalid_token"}, 401, telemetry.get_metrics()
         if session is None:
-            return {"error": "missing_session_context"}, 401
+            telemetry.error_status = "missing_session_context"
+            telemetry.total_request_timer.stop()
+            return {"error": "missing_session_context"}, 401, telemetry.get_metrics()
 
         try:
+            telemetry.jwt_verification_timer.start()
             claims = self.jwt_handler.validate_access_token(
                 access_token,
                 self.issuer_pk,
                 issuer=self.issuer,
                 audience=self.audience,
             )
+            telemetry.jwt_verification_timer.stop()
         except Exception:
-            return {"error": "invalid_token"}, 401
+            telemetry.jwt_verification_timer.stop()
+            telemetry.error_status = "invalid_token"
+            telemetry.total_request_timer.stop()
+            return {"error": "invalid_token"}, 401, telemetry.get_metrics()
 
-        if not verify_access_token_binding_claim(claims, session):
-            return {"error": "binding_mismatch"}, 401
+        telemetry.session_binding_timer.start()
+        valid_binding = verify_access_token_binding_claim(claims, session)
+        telemetry.session_binding_timer.stop()
+        
+        telemetry.binding_validation_success = valid_binding
+        if not valid_binding:
+            telemetry.error_status = "binding_mismatch"
+            telemetry.total_request_timer.stop()
+            return {"error": "binding_mismatch"}, 401, telemetry.get_metrics()
 
         scopes = str(claims.get("scope", "")).split()
         response = self.claims_processor.get_user_claims(str(claims["sub"]), scopes)
         if "email_verified" in claims:
             response["email_verified"] = claims["email_verified"]
-        return response, 200
+            
+        telemetry.total_request_timer.stop()
+        return response, 200, telemetry.get_metrics()
 
     def register_routes(self, app, get_session=None) -> None:
         def _resolve_session():
@@ -82,10 +104,11 @@ class UserInfoEndpoint:
             if token is None:
                 return jsonify({"error": "invalid_token"}), 401
 
-            response, status = self.handle_userinfo_request(
+            response, status, telemetry_dict = self.handle_userinfo_request(
                 token,
                 session=_resolve_session(),
             )
+            response["_telemetry"] = telemetry_dict
             return jsonify(response), status
 
 

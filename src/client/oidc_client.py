@@ -13,6 +13,7 @@ from typing import Dict, Any, Optional, List
 from urllib.parse import urlencode
 from client.kemtls_http_client import KEMTLSHttpClient
 from utils.helpers import generate_random_string
+from utils.telemetry import OIDCClientFlowCollector
 
 
 class OIDCClient:
@@ -54,12 +55,16 @@ class OIDCClient:
             'tokens': [],
             'refresh_events': []
         }
+        self.flow_telemetry = OIDCClientFlowCollector()
 
     def start_auth(self, scope: str = "openid profile email") -> str:
         """
         Start the authorization flow.
         Generates PKCE verifier/challenge and returns the auth URL.
         """
+        self.flow_telemetry.total_flow_timer.start()
+        self.flow_telemetry.authorization_timer.start()
+        self.flow_telemetry.scopes_requested = scope.split()
         # PKCE: Proof Key for Code Exchange (S256)
         # 1. Generate code_verifier (random URL-safe string, 43-128 chars)
         self.code_verifier = generate_random_string(64)
@@ -82,6 +87,7 @@ class OIDCClient:
         query = urlencode(params)
         auth_url = f"{self.issuer_url}/authorize?{query}"
         
+        self.flow_telemetry.authorization_timer.stop()
         return auth_url
 
     def exchange_code(self, code: str) -> Dict[str, Any]:
@@ -100,6 +106,7 @@ class OIDCClient:
             'code_verifier': self.code_verifier
         }
         
+        self.flow_telemetry.token_exchange_timer.start()
         start_time = time.perf_counter()
         resp = self.http_client.post(token_url, data=data)
         duration = (time.perf_counter() - start_time) * 1000  # in ms
@@ -128,6 +135,13 @@ class OIDCClient:
                 'binding_claim': metadata.get('session_binding_id')
             })
             
+        # Try to pull detailed metrics from server response if endpoint injected them
+        t_data = token_data.get("_telemetry", {})
+        if t_data.get('token_sizes'):
+            self.flow_telemetry.token_sizes.update(t_data['token_sizes'])
+            
+        self.flow_telemetry.token_exchange_timer.stop()
+            
         return token_data
 
     def call_api(self, api_url: str) -> Dict[str, Any]:
@@ -141,7 +155,10 @@ class OIDCClient:
             'Authorization': f"Bearer {self.access_token}"
         }
         
+        self.flow_telemetry.userinfo_timer.start()
         resp = self.http_client.get(api_url, headers=headers)
+        self.flow_telemetry.userinfo_timer.stop()
+        self.flow_telemetry.total_flow_timer.stop()
         return resp
 
     def refresh(self) -> Dict[str, Any]:
@@ -203,4 +220,4 @@ class OIDCClient:
 
     def get_telemetry(self) -> Dict[str, Any]:
         """Return the collected telemetry."""
-        return self.telemetry
+        return self.flow_telemetry.get_metrics()
