@@ -18,25 +18,23 @@ CRYPTO OPERATIONS
 --------------------------------------------------------------------------------
 Operation                      Reference    Ours         Improvement    
 --------------------------------------------------------------------------------
-kyber_keygen                         0.45ms       0.00ms         99.8%
-kyber_encap                          0.52ms       0.00ms         99.6%
-kyber_decap                          0.48ms       0.00ms         99.8%
-dilithium_keygen                     1.20ms       0.20ms         83.3%
-dilithium_sign                       2.80ms       0.45ms         83.8%
-dilithium_verify                     1.50ms       0.11ms         92.7%
-chacha20_encrypt                     0.08ms       0.01ms         91.2%
-chacha20_decrypt                     0.08ms       0.01ms         92.5%
+kyber_keygen                         0.45ms       1.33ms       -196.7%
+kyber_encap                          0.52ms       0.11ms         79.4%
+kyber_decap                          0.48ms       0.12ms         75.8%
+dilithium_keygen                     1.20ms       0.39ms         67.2%
+dilithium_sign                       2.80ms       1.21ms         56.9%
+dilithium_verify                     1.50ms       0.41ms         72.8%
+chacha20_encrypt                     0.08ms       0.11ms        -38.8%
+chacha20_decrypt                     0.08ms       0.02ms         72.5%
 
 
 PROTOCOL OPERATIONS
 --------------------------------------------------------------------------------
 Operation                      Reference    Ours         Improvement    
 --------------------------------------------------------------------------------
-kemtls_handshake                     8.50ms       0.56ms         93.4%
-jwt_create                           3.00ms       0.49ms         83.5%
-jwt_verify                           1.60ms       0.14ms         91.3%
-pop_generate                         2.90ms       0.51ms         82.4%
-pop_verify                           3.20ms       0.00ms         99.9%
+kemtls_handshake                     8.50ms       0.82ms         90.3%
+jwt_create                           3.00ms       0.59ms         80.4%
+jwt_verify                           1.60ms       0.16ms         89.9%
 
 
 END_TO_END OPERATIONS

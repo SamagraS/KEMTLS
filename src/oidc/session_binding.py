@@ -68,9 +68,11 @@ def _get_session_bytes(session, attribute: str) -> bytes:
         raise ValueError("session is required for KEMTLS binding")
 
     value = getattr(session, attribute, None)
-    if not isinstance(value, bytes) or not value:
-        raise ValueError(f"session.{attribute} must be populated bytes")
-    return value
+    if isinstance(value, bytes) and value:
+        return value
+    if isinstance(value, str) and value:
+        return value.encode("utf-8")
+    raise ValueError(f"session.{attribute} must be populated bytes or str")
 
 
 __all__ = [

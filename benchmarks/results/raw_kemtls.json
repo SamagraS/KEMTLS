@@ -1,12 +1,47 @@
 {
   "component_times_s": {
-    "cert_validation": 0.034799300017766654,
-    "pdk_lookup": 2.700020559132099e-06
+    "cert_validation": 0.008099199971184134,
+    "pdk_lookup": 4.700035788118839e-06
   },
   "runs": {
     "kemtls": [
       {
-        "latency_s": 0.0013960999785922468,
+        "latency_s": 0.0011727999662980437,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.001309499959461391,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0008837000350467861,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0008645000052638352,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0008166999905370176,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0008773999870754778,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.001813200011383742,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0009255000040866435,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
@@ -16,227 +51,112 @@
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0007118000066839159,
+        "latency_s": 0.0010674000368453562,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.000672499998472631,
+        "latency_s": 0.0009169999975711107,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006807000027038157,
+        "latency_s": 0.0011698000016622245,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0008636999991722405,
+        "latency_s": 0.001041900017298758,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.000700299977324903,
+        "latency_s": 0.0008732000133022666,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.000686699990183115,
+        "latency_s": 0.000881000014487654,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.000686399987898767,
+        "latency_s": 0.0017365000094287097,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0007636999944224954,
+        "latency_s": 0.0008169999928213656,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006772999768145382,
+        "latency_s": 0.000929799978621304,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0007390000391751528,
+        "latency_s": 0.0009015999967232347,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006352000054903328,
+        "latency_s": 0.0008707999950274825,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006557999877259135,
+        "latency_s": 0.0008683999767526984,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006126000080257654,
+        "latency_s": 0.0007803999469615519,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006543000345118344,
+        "latency_s": 0.0009495000122115016,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0008233000407926738,
+        "latency_s": 0.0012799999676644802,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006395000382326543,
+        "latency_s": 0.0025822000461630523,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006194000015966594,
+        "latency_s": 0.0009422000148333609,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006396000389941037,
+        "latency_s": 0.0006846999749541283,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006284000119194388,
+        "latency_s": 0.0006901000160723925,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006231000297702849,
+        "latency_s": 0.0015133999986574054,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006108999950811267,
+        "latency_s": 0.0015158000169321895,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006277999491430819,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0007093999884091318,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006747000152245164,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0007113000028766692,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006777999806217849,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006520000169984996,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006227000267244875,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.000640000042039901,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.000693799986038357,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006464999751187861,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006557999877259135,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006110999966040254,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006401000428013504,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006384000298567116,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006510000093840063,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006772000342607498,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.000652700022328645,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006674999604001641,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006297999643720686,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.000632000039331615,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006745000137016177,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0007322999881580472,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0009472999954596162,
-        "sh_size_bytes": 7831,
-        "total_bytes": 11094
-      },
-      {
-        "latency_s": 0.0006732000038027763,
+        "latency_s": 0.0007987999706529081,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
@@ -246,319 +166,499 @@
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.00061779998941347,
+        "latency_s": 0.0009168999968096614,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006121000042185187,
+        "latency_s": 0.0012836999958381057,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006259999936446548,
+        "latency_s": 0.0011412999592721462,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006307000294327736,
+        "latency_s": 0.0009450999787077308,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006141000194475055,
+        "latency_s": 0.0008767999825067818,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006381000275723636,
+        "latency_s": 0.0016887999954633415,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006799999973736703,
+        "latency_s": 0.001499100006185472,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006179000483825803,
+        "latency_s": 0.0009807999595068395,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006291000172495842,
+        "latency_s": 0.0008131000213325024,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006152999703772366,
+        "latency_s": 0.0009716000058688223,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.000652700022328645,
+        "latency_s": 0.0014187999768182635,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006348000024445355,
+        "latency_s": 0.0016547000268474221,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006211000145412982,
+        "latency_s": 0.000986900005955249,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006223000236786902,
+        "latency_s": 0.0014235999551601708,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.000700899981893599,
+        "latency_s": 0.0011109000188298523,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006350000039674342,
+        "latency_s": 0.001323700009379536,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0007223999709822237,
+        "latency_s": 0.0014053999911993742,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006547999801114202,
+        "latency_s": 0.0008191000088118017,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006193000008352101,
+        "latency_s": 0.000762099982239306,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006230000290088356,
+        "latency_s": 0.0013840999454259872,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006293000187724829,
+        "latency_s": 0.001554100017528981,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006467999774031341,
+        "latency_s": 0.0009088999941013753,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0007114000036381185,
+        "latency_s": 0.0014185999752953649,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006178999901749194,
+        "latency_s": 0.000977399991825223,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006430000066757202,
+        "latency_s": 0.0013550999574363232,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006492999964393675,
+        "latency_s": 0.000990099972113967,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006348000024445355,
+        "latency_s": 0.0008014999912120402,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006256999913603067,
+        "latency_s": 0.0011828999849967659,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006270000012591481,
+        "latency_s": 0.002453099994454533,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006557999877259135,
+        "latency_s": 0.0016676000086590648,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006171000422909856,
+        "latency_s": 0.0012363999849185348,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.000624600041192025,
+        "latency_s": 0.0011470000026747584,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006124000065028667,
+        "latency_s": 0.0010910999844782054,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006149999680928886,
+        "latency_s": 0.0011339000193402171,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006187999970279634,
+        "latency_s": 0.0011009000008925796,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006157999741844833,
+        "latency_s": 0.0019047000096179545,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006975000142119825,
+        "latency_s": 0.002073999959975481,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006241000373847783,
+        "latency_s": 0.000957900017965585,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006285999552346766,
+        "latency_s": 0.002986999985296279,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006252999883145094,
+        "latency_s": 0.0011742000351659954,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006214999593794346,
+        "latency_s": 0.0009251000010408461,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006286000134423375,
+        "latency_s": 0.0018316999776288867,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006478999857790768,
+        "latency_s": 0.0010331000084988773,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.000610099988989532,
+        "latency_s": 0.000678399985190481,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006495999987237155,
+        "latency_s": 0.0009707999997772276,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006258999928832054,
+        "latency_s": 0.0009892000234685838,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006210000137798488,
+        "latency_s": 0.001906600024085492,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006204000092111528,
+        "latency_s": 0.0009464000468142331,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006386000313796103,
+        "latency_s": 0.0006294000195339322,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006265999982133508,
+        "latency_s": 0.0006985999643802643,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0006276000058278441,
+        "latency_s": 0.0006551999831572175,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       },
       {
-        "latency_s": 0.0008892999612726271,
+        "latency_s": 0.000618099991697818,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0011529999901540577,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.002305599977262318,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0006529000238515437,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0006300000241026282,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0008644000045023859,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0008363999659195542,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0007813999545760453,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0009353000205010176,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0007592999609187245,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0006282999529503286,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0006306000286713243,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0006616999744437635,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0007139000226743519,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0012663000379689038,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0006101999897509813,
+        "sh_size_bytes": 7831,
+        "total_bytes": 11094
+      },
+      {
+        "latency_s": 0.0006218000198714435,
         "sh_size_bytes": 7831,
         "total_bytes": 11094
       }
     ],
     "kemtls_pdk": [
       {
-        "latency_s": 0.00045490002958104014,
+        "latency_s": 0.0006817000103183091,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0004526000120677054,
+        "latency_s": 0.0016771999653428793,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0004317999701015651,
+        "latency_s": 0.0005628999788314104,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00043890002416446805,
+        "latency_s": 0.0005048000020906329,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00041259999852627516,
+        "latency_s": 0.0005518000107258558,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0005066999583505094,
+        "latency_s": 0.0005371999577619135,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00043730001198127866,
+        "latency_s": 0.0011912999907508492,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0004296000115573406,
+        "latency_s": 0.0005336999893188477,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00041850004345178604,
+        "latency_s": 0.0005097000394016504,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0004789999802596867,
+        "latency_s": 0.0006407999899238348,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00041930004954338074,
+        "latency_s": 0.002007699979003519,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006150999688543379,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.00044620002154260874,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0005392999737523496,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0004978000069968402,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0011651000240817666,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0007813000120222569,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0004535000189207494,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0005240000318735838,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0009843999869190156,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0010810000239871442,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0007475999882444739,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006540999747812748,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0008901000255718827,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0012698000064119697,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.00044329999946057796,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.00043349998304620385,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0004460999625734985,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.001233199960552156,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.000880700012203306,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.00045819999650120735,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
@@ -568,42 +668,252 @@
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0004084000247530639,
+        "latency_s": 0.0007762000313960016,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00038949999725446105,
+        "latency_s": 0.0006016000406816602,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0004406000371091068,
+        "latency_s": 0.0005641000461764634,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0003855999675579369,
+        "latency_s": 0.0004986000130884349,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00045439996756613255,
+        "latency_s": 0.000658600009046495,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00040660001104697585,
+        "latency_s": 0.001395299972500652,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00038430001586675644,
+        "latency_s": 0.0004526999546214938,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00041420001070946455,
+        "latency_s": 0.0005667000077664852,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006561999907717109,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006741000106558204,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0009162999922409654,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006098999874666333,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006402000435627997,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006379999686032534,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006229999708011746,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0007160999812185764,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0005301999626681209,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0005194999976083636,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0005359000060707331,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0007795999990776181,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006704999832436442,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0005694999708794057,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006873999955132604,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006423000013455749,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0009980000322684646,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.00048590003279969096,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0005501999985426664,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.000762099982239306,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.001210999966133386,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0012224999954923987,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0014948999742045999,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006830000202171504,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006417999975383282,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.000685199978761375,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006773999775759876,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0011801000218838453,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0016931999707594514,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0007308999774977565,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0011125000310130417,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006366000161506236,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0016495000454597175,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0015620000194758177,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0005498999962583184,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0004319000290706754,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0005679999594576657,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006853999802842736,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0006702999817207456,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.00039519998244941235,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.0004094999749213457,
+        "sh_size_bytes": 1701,
+        "total_bytes": 4959
+      },
+      {
+        "latency_s": 0.00045900000259280205,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
@@ -613,192 +923,22 @@
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00038139999378472567,
+        "latency_s": 0.0003809999907389283,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0003823000006377697,
+        "latency_s": 0.0007193000055849552,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00038519996451213956,
+        "latency_s": 0.0006132000125944614,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0004020999767817557,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.000603299995418638,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00046880001900717616,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0004354999982751906,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00041879998752847314,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00038159999530762434,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00039760000072419643,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00040119996992871165,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00039229996036738157,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00040499999886378646,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00038789998507127166,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00038320000749081373,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003988000098615885,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00039569998625665903,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0004311000229790807,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0004057000041939318,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0004065000102855265,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003856000257655978,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00040550000267103314,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003895999980159104,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00041939999209716916,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00043120002374053,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00039060000563040376,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0004162999684922397,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00039900001138448715,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0004010999691672623,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003933999687433243,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003871000371873379,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0004057000041939318,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00042919995030388236,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0004057000041939318,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00038819998735561967,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0004037999897263944,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003955999854952097,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003968999953940511,
+        "latency_s": 0.0003865999751724303,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
@@ -808,259 +948,459 @@
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0003871000371873379,
+        "latency_s": 0.000394499977119267,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0003994000144302845,
+        "latency_s": 0.00041229999624192715,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0004034999874420464,
+        "latency_s": 0.0005603000172413886,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0003874999820254743,
+        "latency_s": 0.0005123000009916723,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00044380000326782465,
+        "latency_s": 0.00047209998592734337,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00039679999463260174,
+        "latency_s": 0.0003905000048689544,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.000423500023316592,
+        "latency_s": 0.00038050004513934255,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00038400001358240843,
+        "latency_s": 0.00038350000977516174,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00038649997441098094,
+        "latency_s": 0.0012735999771393836,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0004015000304207206,
+        "latency_s": 0.00039659999310970306,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.00038760004099458456,
+        "latency_s": 0.0003910000086762011,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       },
       {
-        "latency_s": 0.0004020999767817557,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003893999964930117,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003997000167146325,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00039980001747608185,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00038510002195835114,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00039760000072419643,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003966999938711524,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003871999797411263,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003887999919243157,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00039629999082535505,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0004105000407435,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00038539996603503823,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003893999964930117,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0004189000464975834,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003852999652735889,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00038540002424269915,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00038570002652704716,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0004259999841451645,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00039629999082535505,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00039679999463260174,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00039569998625665903,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00040879996959120035,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00038590002804994583,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00038599997060373425,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00038760004099458456,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.00039570004446431994,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003887999919243157,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.0003842000151053071,
-        "sh_size_bytes": 1701,
-        "total_bytes": 4959
-      },
-      {
-        "latency_s": 0.000477899971883744,
+        "latency_s": 0.00046339997788891196,
         "sh_size_bytes": 1701,
         "total_bytes": 4959
       }
     ],
     "pqtls_simulated": [
       {
-        "latency_s": 0.0029343999922275543,
+        "latency_s": 0.002604899986181408,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0008821000228635967,
+        "latency_s": 0.0022080999915488064,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0010997999925166368,
+        "latency_s": 0.0012340999674052,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0009325999999418855,
+        "latency_s": 0.0012315000058151782,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0007854000432416797,
+        "latency_s": 0.001274899987038225,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0013157000066712499,
+        "latency_s": 0.002054199983831495,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0011569000198505819,
+        "latency_s": 0.0018349000019952655,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0008298000320792198,
+        "latency_s": 0.0009950000094249845,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0010486999526619911,
+        "latency_s": 0.0017488999874331057,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0013049999834038317,
+        "latency_s": 0.001734799996484071,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0013647000305354595,
+        "latency_s": 0.0031012999825179577,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0010627000010572374,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0013704000157304108,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0010133999749086797,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.003159699961543083,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0012582999770529568,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0011730000260286033,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.001055500004440546,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0011669000377878547,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0014616000116802752,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.001727999944705516,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0021063999738544226,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0012348999734967947,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.00246679998235777,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0012405000161379576,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.001101900008507073,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0011728000245057046,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.001180600025691092,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0029670000076293945,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0023061000392772257,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0014671999961137772,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0008357000187970698,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.00184599997010082,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.001854900037869811,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0012759999954141676,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0011937000090256333,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0017496999935247004,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0017632000381127,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0016693000216037035,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0012597999884746969,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0010231999913230538,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.002022800035774708,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.001215500000398606,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0013316000113263726,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0029986000154167414,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0018486999906599522,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0011864000116474926,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0013963999808765948,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0013334000250324607,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.001099000044632703,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.001713800011202693,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0014503999846056104,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0011526999878697097,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0012235000031068921,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0012073999969288707,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.002072200004477054,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.001416300015989691,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0009871000074781477,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.002528599987272173,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0031778000411577523,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0019738999544642866,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.00224910001270473,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0018994000274688005,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0022131000296212733,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0016802999889478087,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0015580999897792935,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.00273060001200065,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0017169999773614109,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0017713000415824354,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0016330000362358987,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0018854999798350036,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0012049999786540866,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0022010999964550138,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.002340200007893145,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0010355000267736614,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.0010241999989375472,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.001244500046595931,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.002632099960464984,
+        "sh_size_bytes": 3400,
+        "total_bytes": 12000
+      },
+      {
+        "latency_s": 0.000797299959231168,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
@@ -1070,442 +1410,102 @@
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0007433000137098134,
+        "latency_s": 0.0011003999970853329,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0007061000214889646,
+        "latency_s": 0.00104750000173226,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0007892000139690936,
+        "latency_s": 0.0007249000482261181,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0007739000138826668,
+        "latency_s": 0.001309499959461391,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.001027699967380613,
+        "latency_s": 0.0012592999846674502,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0008657000144012272,
+        "latency_s": 0.0013562000240199268,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.000783399969805032,
+        "latency_s": 0.0011002999963238835,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0008051999611780047,
+        "latency_s": 0.001005499972961843,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0009239999926649034,
+        "latency_s": 0.00108889996772632,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0007751999655738473,
+        "latency_s": 0.0012118000304326415,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0009108000085689127,
+        "latency_s": 0.0022487000096589327,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0010614999919198453,
+        "latency_s": 0.0010275999666191638,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0007637999951839447,
+        "latency_s": 0.0010957999620586634,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0009988000383600593,
+        "latency_s": 0.0007515000179409981,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0009005999891087413,
+        "latency_s": 0.0007588000153191388,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0007786999922245741,
+        "latency_s": 0.000844899972435087,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0007299999706447124,
+        "latency_s": 0.0017819999484345317,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0010671999771147966,
+        "latency_s": 0.0008624999900348485,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.0007992999744601548,
+        "latency_s": 0.0007223000284284353,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       },
       {
-        "latency_s": 0.001088599965441972,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0009338000090792775,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.000749400001950562,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007919999770820141,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007688999758102,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0010334999533370137,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007369000231847167,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.000916799996048212,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0010679999832063913,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.000706799968611449,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.001033600012306124,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007327999919652939,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0010878999601118267,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0009892000234685838,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0010895999730564654,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.001303599972743541,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.000818900007288903,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0009914999827742577,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0010721000144258142,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008513000211678445,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0017124000005424023,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007941999938338995,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0009080999880097806,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007483999943360686,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0012302999966777861,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0006983999628573656,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.001049300015438348,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0011831000447273254,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0009902000310830772,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008305000374093652,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0011520000407472253,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007449999684467912,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008297999738715589,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0009674999746493995,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008393999887630343,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0015891999937593937,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008368000271730125,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008070999756455421,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007172999903559685,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008259000023826957,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007199000101536512,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007619999814778566,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0010930999997071922,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0010021000052802265,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.001137999992351979,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008999000419862568,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007381999748758972,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008727000094950199,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0012920000008307397,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.00076149997767061,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008540999842807651,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0015386000159196556,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007387999794445932,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0014131999923847616,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007100999937392771,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007263000006787479,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008294000290334225,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008366999682039022,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008016999927349389,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0009503000183030963,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0010392999975010753,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0013818999868817627,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.001275499991606921,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008710999973118305,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0008087000460363925,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0007835000287741423,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.000707099970895797,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0006935999845154583,
-        "sh_size_bytes": 3400,
-        "total_bytes": 12000
-      },
-      {
-        "latency_s": 0.0013017000164836645,
+        "latency_s": 0.0008339000050909817,
         "sh_size_bytes": 3400,
         "total_bytes": 12000
       }

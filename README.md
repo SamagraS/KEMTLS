@@ -104,12 +104,12 @@ Unlike traditional TLS which uses digital signatures for server authentication, 
 
 The system runs **4 separate servers** that communicate in real-time:
 
-1. **Authorization Server** (Port 5000)
+1. **Authorization Server** (Port 4433)
    - OIDC endpoints (/.well-known/openid-configuration, /authorize, /token)
    - JWT token issuance with Dilithium3 signatures
    - Server long-term Kyber/Dilithium keys
 
-2. **Resource Server** (Port 5001)
+2. **Resource Server** (Port 4434)
    - Protected resource endpoints (/api/userinfo)
    - Token verification with Dilithium3
    - PoP challenge generation and verification
@@ -129,21 +129,21 @@ The demo requires **4 terminals** running simultaneously:
 
 #### Terminal 1: Authorization Server
 ```bash
-python scripts/run_auth_server.py
-# Starts on http://localhost:5000
+python scripts/run_kemtls_auth_server.py
+# Starts on kemtls://127.0.0.1:4433
 # Provides OIDC endpoints and JWT token issuance
 ```
 
 #### Terminal 2: Resource Server
 ```bash
-python scripts/run_resource_server.py
-# Starts on http://localhost:5001
+python scripts/run_kemtls_resource_server.py
+# Starts on kemtls://127.0.0.1:4434
 # Provides protected resources with PoP verification
 ```
 
 #### Terminal 3: Demo WebSocket Server
 ```bash
-python scripts/demo_server.py
+python scripts/step_flow_server.py
 # Starts on http://localhost:5002
 # Orchestrates demo execution and streams events to frontend
 # Runs benchmarks automatically before demo phases
@@ -163,10 +163,10 @@ npm run dev
 
 2. **Check connection status*      # Cryptographic primitives
 ```
-│   │   ├── kyber_kem.py           # Kyber768 KEM operations
-│   │   ├── dilithium_sig.py       # ML-DSA-65/Dilithium3 signatures
+│   │   ├── ml_kem.py              # ML-KEM-768 operations
+│   │   ├── ml_dsa.py              # ML-DSA-65 signatures
 │   │   ├── aead.py                # ChaCha20-Poly1305 AEAD
-│   │   └── kdf.py                 # HKDF key derivation
+│   │   └── key_schedule.py        # HKDF/key schedule derivation
 │   ├── kemtls/                    # KEMTLS protocol
 │   │   ├── handshake.py           # Handshake protocol
 │   │   ├── channel.py             # Encrypted channel
@@ -180,21 +180,22 @@ npm run dev
 │   │   ├── client.py              # Client-side PoP
 │   │   └── server.py              # Server-side PoP verification
 │   ├── servers/                   # Server implementations
-│   │   ├── auth_server.py         # Authorization Server (Flask)
-│   │   └── resource_server.py     # Resource Server (Flask)
+│   │   ├── auth_server_app.py     # Auth server app factory
+│   │   ├── resource_server_app.py # Resource server app factory
+│   │   ├── auth_server.py         # Compatibility wrapper
+│   │   └── resource_server.py     # Compatibility wrapper
 │   └── client/                    # Client implementation
 │       ├── kemtls_client.py       # KEMTLS client
 │       └── oidc_client.py         # OIDC client logic
 ├── scripts/                       # Execution scripts
-│   ├── generate_keys.py           # Generate Kyber/Dilithium keys
-│   ├── run_auth_server.py         # Start authorization server
-│   ├── run_resource_server.py     # Start resource server
-│   ├── demo_server.py             # WebSocket demo server (Flask-SocketIO)
-│   ├── run_client.py              # Run client flow
+│   ├── bootstrap_ca.py            # Generate CA/server keys and certificates
+│   ├── run_kemtls_auth_server.py  # Start KEMTLS authorization server
+│   ├── run_kemtls_resource_server.py # Start KEMTLS resource server
+│   ├── step_flow_server.py        # WebSocket step-flow server (Flask-SocketIO)
+│   ├── demo_full_flow.py          # Run end-to-end demo flow
 │   ├── run_tests.py               # Execute test suite
 │   ├── run_benchmarks.py          # Run all benchmarks
-│   ├── check_setup.py             # Verify installation
-│   └── start_demo.py              # Helper to start all servers
+│   └── __pycache__/               # Python bytecode cache
 ├── benchmarks/                    # Benchmarking scripts
 │   ├── crypto_benchmarks.py       # Crypto operation benchmarks
 │   ├── protocol_benchmarks.py     # Protocol-level benchmarks
@@ -219,15 +220,12 @@ npm run dev
 │   │   └── index.css              # Cyber-themed styling
 │   ├── package.json               # Node dependencies
 │   └── vite.config.ts             # Vite configuration
-├── keys/                          # Generated cryptographic keys
-│   ├── auth_server_kyber_pk.bin
-│   ├── auth_server_kyber_sk.bin
-│   ├── auth_server_dilithium_pk.bin
-│   └── auth_server_dilithium_sk.bin
-├── docs/                          # Documentation
-│   ├── README.md                  # This file
-│   ├── architecture.md
-│   └── security-analysis.md
+├── keys/                          # Generated cryptographic artifacts
+│   ├── ca/
+│   ├── auth_server/
+│   ├── resource_server/
+│   └── pdk/
+├── papers/                        # Research/notes artifacts
 ├── tests/                         # Unit and integration tests
 ├── results_benchmarks/            # Benchmark results (JSON)
 │   ├── protocol_benchmark_results.json
@@ -258,7 +256,7 @@ npm run dev
 
 3. **Generate cryptographic keys**
    ```bash
-   python scripts/generate_keys.py
+   python scripts/bootstrap_ca.py
    ```
 
 4. **Install frontend dependencies** (for web demo)
@@ -269,14 +267,28 @@ npm run dev
 
 ### Running the Demo
 
-1. **Start the demo server** (Terminal 1)
+1. **Start the authorization server** (Terminal 1)
    ```bash
-   python scripts/demo_server (100 iterations)
-- **Total Time**: 1.85 ms (average)
-- **Phase 1 (KEMTLS Handshake)**: 0.73 ms
-- **Phase 2 (Authorization)**: 0.002 ms
-- **Phase 3 (Token Exchange)**: 0.485 ms
-- **Phase 4 (Resource Access)**: 0.624 ms
+   python scripts/run_kemtls_auth_server.py
+   ```
+
+2. **Start the resource server** (Terminal 2)
+   ```bash
+   python scripts/run_kemtls_resource_server.py
+   ```
+
+3. **Start the step-flow WebSocket server** (Terminal 3)
+   ```bash
+   python scripts/step_flow_server.py
+   ```
+
+4. **Start the frontend** (Terminal 4)
+   ```bash
+   cd frontend
+   npm run dev
+   ```
+
+5. **Open** `http://localhost:5173` **in your browser**
 
 ### Real-Time Benchmarks (50 iterations, displayed in UI)
 The demo automatically runs benchmarks before execution:
@@ -385,7 +397,7 @@ The demo automatically runs benchmarks before execution:
 ### WebSocket Connection Issues
 If you see "Disconnected" status:
 1. Ensure demo server is running on port 5002
-2. Check terminal for errors in demo_server.py
+2. Check terminal for errors in step_flow_server.py
 3. Verify Flask-SocketIO is installed: `pip install flask-socketio`
 4. Try restarting the demo server
 
@@ -399,16 +411,16 @@ If benchmark cards stay on "-- ms":
 ### Key Generation Errors
 If you see "Server keys not found":
 ```bash
-python scripts/generate_keys.py
+python scripts/bootstrap_ca.py
 ```
 This creates keys in the `keys/` directory.
 
 ### Port Already in Use
 If ports 5000, 5001, 5002, or 5173 are occupied:
 - Kill existing processes or change ports in respective scripts
-- Auth Server: Edit `scripts/run_auth_server.py`
-- Resource Server: Edit `scripts/run_resource_server.py`
-- Demo Server: Edit `scripts/demo_server.py`
+- Auth Server: Edit `scripts/run_kemtls_auth_server.py`
+- Resource Server: Edit `scripts/run_kemtls_resource_server.py`
+- Demo Server: Edit `scripts/step_flow_server.py`
 - Frontend: Edit `vite.config.ts`
 
 ## Development
@@ -505,10 +517,10 @@ If you use this implementation in research, please cite:
 KEMTLS/
 ├── src/
 │   ├── crypto/              # Cryptographic primitives
-│   │   ├── kyber_kem.py     # Kyber768 KEM operations
-│   │   ├── dilithium_sig.py # Dilithium3 signatures
+│   │   ├── ml_kem.py        # ML-KEM-768 operations
+│   │   ├── ml_dsa.py        # ML-DSA-65 signatures
 │   │   ├── aead.py          # ChaCha20-Poly1305 AEAD
-│   │   └── kdf.py           # HKDF key derivation
+│   │   └── key_schedule.py  # HKDF/key schedule derivation
 │   ├── kemtls/              # KEMTLS protocol
 │   │   ├── handshake.py     # Handshake protocol
 │   │   ├── channel.py       # Encrypted channel
@@ -522,17 +534,15 @@ KEMTLS/
 │   │   ├── client.py        # Client-side PoP
 │   │   └── server.py        # Server-side PoP verification
 │   ├── servers/             # Server implementations
-│   │   ├── auth_server.py   # Authorization Server
-│   │   └── resource_server.py # Resource Server
+│   │   ├── auth_server_app.py # Auth server app factory
+│   │   ├── resource_server_app.py # Resource server app factory
+│   │   ├── auth_server.py   # Compatibility wrapper
+│   │   └── resource_server.py # Compatibility wrapper
 │   └── client/              # Client implementation
 │       └── kemtls_client.py # KEMTLS client
 ├── benchmarks/              # Benchmarking scripts
 ├── demos/                   # Demo scripts
 ├── frontend/                # Web-based demo UI
-├── docs/                    # Documentation
-│   ├── TechnicalDocumentation.pdf
-│   ├── BenchmarkResults.pdf
-│   └── ...
 └── results_benchmarks/      # Benchmark results
 ```
 

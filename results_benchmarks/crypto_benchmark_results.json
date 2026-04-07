@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "timestamp": "2026-02-09 03:35:03",
+    "timestamp": "2026-04-07 20:22:05",
     "iterations_kem_sig": 100,
     "iterations_aead": 1000
   },
@@ -10,32 +10,32 @@
       "keygen": {
         "operation": "Kyber KeyGen",
         "iterations": 100,
-        "avg_ms": 0.001,
-        "min_ms": 0.001,
-        "max_ms": 0.006,
-        "median_ms": 0.001,
-        "p95_ms": 0.002,
-        "p99_ms": 0.006
+        "avg_ms": 1.335,
+        "min_ms": 0.045,
+        "max_ms": 127.663,
+        "median_ms": 0.052,
+        "p95_ms": 0.102,
+        "p99_ms": 127.663
       },
       "encapsulate": {
         "operation": "Kyber Encap",
         "iterations": 100,
-        "avg_ms": 0.002,
-        "min_ms": 0.002,
-        "max_ms": 0.027,
-        "median_ms": 0.002,
-        "p95_ms": 0.002,
-        "p99_ms": 0.027
+        "avg_ms": 0.107,
+        "min_ms": 0.052,
+        "max_ms": 0.177,
+        "median_ms": 0.11,
+        "p95_ms": 0.159,
+        "p99_ms": 0.177
       },
       "decapsulate": {
         "operation": "Kyber Decap",
         "iterations": 100,
-        "avg_ms": 0.001,
-        "min_ms": 0.001,
-        "max_ms": 0.003,
-        "median_ms": 0.001,
-        "p95_ms": 0.002,
-        "p99_ms": 0.003
+        "avg_ms": 0.116,
+        "min_ms": 0.055,
+        "max_ms": 0.266,
+        "median_ms": 0.113,
+        "p95_ms": 0.207,
+        "p99_ms": 0.266
       }
     }
   },
@@ -45,32 +45,32 @@
       "keygen": {
         "operation": "Dilithium KeyGen",
         "iterations": 100,
-        "avg_ms": 0.2,
-        "min_ms": 0.184,
-        "max_ms": 0.932,
-        "median_ms": 0.19,
-        "p95_ms": 0.214,
-        "p99_ms": 0.932
+        "avg_ms": 0.393,
+        "min_ms": 0.234,
+        "max_ms": 5.686,
+        "median_ms": 0.312,
+        "p95_ms": 0.651,
+        "p99_ms": 5.686
       },
       "sign": {
         "operation": "Dilithium Sign",
         "iterations": 100,
-        "avg_ms": 0.454,
-        "min_ms": 0.215,
-        "max_ms": 1.367,
-        "median_ms": 0.393,
-        "p95_ms": 0.89,
-        "p99_ms": 1.367
+        "avg_ms": 1.206,
+        "min_ms": 0.309,
+        "max_ms": 6.488,
+        "median_ms": 0.958,
+        "p95_ms": 2.971,
+        "p99_ms": 6.488
       },
       "verify": {
         "operation": "Dilithium Verify",
         "iterations": 100,
-        "avg_ms": 0.11,
-        "min_ms": 0.107,
-        "max_ms": 0.123,
-        "median_ms": 0.109,
-        "p95_ms": 0.114,
-        "p99_ms": 0.123
+        "avg_ms": 0.408,
+        "min_ms": 0.33,
+        "max_ms": 1.188,
+        "median_ms": 0.363,
+        "p95_ms": 0.636,
+        "p99_ms": 1.188
       }
     }
   },
@@ -81,22 +81,22 @@
       "encrypt": {
         "operation": "ChaCha20-Poly1305 Encrypt",
         "iterations": 1000,
-        "avg_ms": 0.007,
-        "min_ms": 0.006,
-        "max_ms": 0.112,
-        "median_ms": 0.006,
-        "p95_ms": 0.008,
-        "p99_ms": 0.015
+        "avg_ms": 0.111,
+        "min_ms": 0.014,
+        "max_ms": 85.697,
+        "median_ms": 0.02,
+        "p95_ms": 0.055,
+        "p99_ms": 0.107
       },
       "decrypt": {
         "operation": "ChaCha20-Poly1305 Decrypt",
         "iterations": 1000,
-        "avg_ms": 0.006,
-        "min_ms": 0.006,
-        "max_ms": 0.052,
-        "median_ms": 0.006,
-        "p95_ms": 0.007,
-        "p99_ms": 0.011
+        "avg_ms": 0.022,
+        "min_ms": 0.014,
+        "max_ms": 0.202,
+        "median_ms": 0.021,
+        "p95_ms": 0.036,
+        "p99_ms": 0.06
       }
     }
   }

@@ -96,8 +96,8 @@ def run_tests(verbose=True, coverage=True, test_path=None):
     print("KEMTLS POST-QUANTUM OIDC - TEST SUITE")
     print("=" * 70)
     
-    # Build pytest command
-    cmd = ["pytest"]
+    # Build pytest command via the active interpreter to avoid PATH ambiguity.
+    cmd = [sys.executable, "-m", "pytest"]
     
     # Add test target(s) (default to tests directory)
     if isinstance(test_path, list):
@@ -131,21 +131,21 @@ def run_tests(verbose=True, coverage=True, test_path=None):
         
         print("-" * 70)
         if result.returncode == 0:
-            print("✓ All tests passed!")
+            print("[OK] All tests passed!")
             if coverage:
                 coverage_path = os.path.join(ROOT_DIR, "htmlcov", "index.html")
-                print(f"\n📊 Coverage report generated: {coverage_path}")
+                print(f"\n[INFO] Coverage report generated: {coverage_path}")
         else:
-            print("✗ Some tests failed!")
+            print("[FAIL] Some tests failed!")
             sys.exit(result.returncode)
     
     except FileNotFoundError:
-        print("\n✗ Error: pytest not found!")
+        print("\n[ERROR] pytest not found!")
         print("Please install test dependencies:")
         print("  pip install -r requirements.txt")
         sys.exit(1)
     except KeyboardInterrupt:
-        print("\n\n✗ Tests interrupted by user")
+        print("\n\n[ERROR] Tests interrupted by user")
         sys.exit(1)
 
 
@@ -173,7 +173,7 @@ def run_specific_tests():
     test_paths = [os.path.join(TESTS_DIR, filename) for filename in files]
     missing = [path for path in test_paths if not os.path.exists(path)]
     if missing:
-        print("\n✗ Category contains missing test files:")
+        print("\n[ERROR] Category contains missing test files:")
         for path in missing:
             print(f"  - {path}")
         sys.exit(1)

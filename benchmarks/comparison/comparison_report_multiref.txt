@@ -77,21 +77,21 @@ KEMTLS HANDSHAKE:
   PQ-TLS benchmarking (2019)              :     12.0
   Measuring KEMTLS (Cloudflare)           :     8.92
   PQ-OIDC baseline                        :     10.0
-  Our Implementation                      :     0.67 ms (avg improvement:   93.2%)
+  Our Implementation                      :     1.11 ms (avg improvement:   88.7%)
 
 JWT CREATE:
   KEMTLS (CCS 2020)                       :      3.0
   PQ-TLS benchmarking (2019)              :      3.5
   Measuring KEMTLS (Cloudflare)           :      2.9
   PQ-OIDC baseline                        :      4.0
-  Our Implementation                      :     2.04 ms (avg improvement:   39.0%)
+  Our Implementation                      :     1.92 ms (avg improvement:   42.6%)
 
 JWT VERIFY:
   KEMTLS (CCS 2020)                       :      1.6
   PQ-TLS benchmarking (2019)              :      1.8
   Measuring KEMTLS (Cloudflare)           :     1.55
   PQ-OIDC baseline                        :      2.0
-  Our Implementation                      :     1.23 ms (avg improvement:   29.5%)
+  Our Implementation                      :     1.15 ms (avg improvement:   33.6%)
 
 --------------------------------------------------------------------------------
 END-TO-END AUTHENTICATION FLOW COMPARISON (milliseconds)
@@ -102,9 +102,9 @@ Total Authentication Time:
   PQ-TLS benchmarking (2019)              :     25.3
   Measuring KEMTLS (Cloudflare)           :    17.85
   PQ-OIDC baseline                        :     27.0
-  Our Implementation                      :    15.34 ms
+  Our Implementation                      :    20.66 ms
 
-  Average improvement over references: 30.8%
+  Average improvement over references: 6.8%
 
 ================================================================================
 Report generated for 4 reference papers

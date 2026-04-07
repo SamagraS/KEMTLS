@@ -1,53 +1,62 @@
-"""
-Benchmark: OIDC Flow Latency
+"""Benchmark: OIDC Flow Latency against the real KEMTLS OIDC apps."""
 
-Measures:
-- /authorize latency
-- /token latency
-- Resource access latency
-- Refresh latency
-- Total login time
-"""
+from __future__ import annotations
 
+import json
 import os
 import sys
-import json
-import time
 import threading
+import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from kemtls.tcp_server import KEMTLSTCPServer
 from client.kemtls_http_client import KEMTLSHttpClient
 from client.oidc_client import OIDCClient
+from oidc.auth_endpoints import InMemoryClientRegistry
+from servers.auth_server_app import create_auth_server_app
+from servers.resource_server_app import create_resource_server_app
 
-# We dynamically import the apps defined in the scripts
-sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
-try:
-    from run_kemtls_auth_server import create_auth_app
-    from run_kemtls_resource_server import create_rs_app
-except ImportError:
-    pass
-
-from utils.encoding import base64url_decode
 from kemtls.pdk import PDKTrustStore
+from utils.encoding import base64url_decode
 
 
-def start_mock_servers() -> dict:
+BENCH_ISSUER_URL = 'kemtls://127.0.0.1:50001'
+
+
+def start_real_servers() -> dict:
     base_dir = Path(__file__).parent.parent / 'keys'
-    with open(base_dir / 'ca' / 'ca_keys.json') as f: ca_config = json.load(f)
-    with open(base_dir / 'auth_server' / 'as_config.json') as f: as_config = json.load(f)
-    with open(base_dir / 'resource_server' / 'rs_config.json') as f: rs_config = json.load(f)
-    with open(base_dir / 'pdk' / 'pdk_manifest.json') as f: pdk_manifest = json.load(f)
+    with open(base_dir / 'ca' / 'ca_keys.json', 'r', encoding='utf-8') as file_handle:
+        ca_config = json.load(file_handle)
+    with open(base_dir / 'auth_server' / 'as_config.json', 'r', encoding='utf-8') as file_handle:
+        as_config = json.load(file_handle)
+    with open(base_dir / 'resource_server' / 'rs_config.json', 'r', encoding='utf-8') as file_handle:
+        rs_config = json.load(file_handle)
+    with open(base_dir / 'pdk' / 'pdk_manifest.json', 'r', encoding='utf-8') as file_handle:
+        pdk_manifest = json.load(file_handle)
 
     pdk_key_ids = {entry.get('identity'): entry.get('key_id') for entry in pdk_manifest}
+    auth_app = create_auth_server_app(
+        {
+            'issuer': BENCH_ISSUER_URL,
+            'issuer_public_key': base64url_decode(as_config['jwt_signing_pk']),
+            'issuer_secret_key': base64url_decode(as_config['jwt_signing_sk']),
+            'clients': {
+                'bench-client': {
+                    'redirect_uris': ['kemtls://127.0.0.1:50001/callback'],
+                },
+            },
+            'demo_user': 'user-1',
+            'introspection_endpoint': f'{BENCH_ISSUER_URL}/introspect',
+        },
+        stores={'client_registry': InMemoryClientRegistry({'bench-client': {'redirect_uris': ['kemtls://127.0.0.1:50001/callback']}})},
+    )
 
     # Auth Server
-    as_app = create_auth_app(as_config)
     as_server = KEMTLSTCPServer(
-        app=as_app,
+        app=auth_app,
         server_identity='auth-server',
         server_lt_sk=base64url_decode(as_config['longterm_sk']),
         cert=as_config['certificate'],
@@ -57,7 +66,13 @@ def start_mock_servers() -> dict:
     threading.Thread(target=as_server.start, daemon=True).start()
 
     # Resource Server
-    rs_app = create_rs_app(base64url_decode(as_config['jwt_signing_pk']))
+    rs_app = create_resource_server_app(
+        {
+            'issuer': BENCH_ISSUER_URL,
+            'issuer_public_key': base64url_decode(as_config['jwt_signing_pk']),
+            'resource_audience': None,
+        }
+    )
     rs_server = KEMTLSTCPServer(
         app=rs_app,
         server_identity='resource-server',
@@ -80,26 +95,34 @@ def start_mock_servers() -> dict:
 
 
 def bench_flow(mode: str, config: dict, server_config: dict) -> Dict[str, Any]:
-    http_client = KEMTLSHttpClient(
+    auth_http_client = KEMTLSHttpClient(
         ca_pk=server_config['ca_pk'],
         pdk_store=server_config['pdk_store'],
         expected_identity="auth-server",
-        mode=mode
+        mode=mode,
+        keep_alive=True,
+    )
+    resource_http_client = KEMTLSHttpClient(
+        ca_pk=server_config['ca_pk'],
+        pdk_store=server_config['pdk_store'],
+        expected_identity="resource-server",
+        mode=mode,
+        keep_alive=True,
     )
     
     oidc_client = OIDCClient(
-        http_client=http_client,
+        http_client=auth_http_client,
         client_id="bench-client",
-        issuer_url="kemtls://127.0.0.1:50001",
-        redirect_uri="kemtls://127.0.0.1/callback"
+        issuer_url=BENCH_ISSUER_URL,
+        redirect_uri="kemtls://127.0.0.1:50001/callback"
     )
 
     times = {}
 
-    # 1. /authorize (mock local for client generation, plus simple GET)
+    # 1. /authorize
     t0 = time.perf_counter()
     auth_url = oidc_client.start_auth()
-    resp = http_client.get(auth_url.replace('/authorize', '/authorize'))
+    resp = auth_http_client.get(auth_url)
     code = resp.get('body', {}).get('code')
     t1 = time.perf_counter()
     times['authorize_s'] = t1 - t0
@@ -110,15 +133,16 @@ def bench_flow(mode: str, config: dict, server_config: dict) -> Dict[str, Any]:
     t1 = time.perf_counter()
     times['token_s'] = t1 - t0
 
-    # 3. /resource (switch identity)
-    http_client.expected_identity = "resource-server"
+    # 3. /resource using separate resource-server client
     t0 = time.perf_counter()
-    oidc_client.call_api("kemtls://127.0.0.1:50002/resource")
+    resource_http_client.get(
+        "kemtls://127.0.0.1:50002/userinfo",
+        headers={'Authorization': f'Bearer {oidc_client.access_token}'},
+    )
     t1 = time.perf_counter()
     times['resource_s'] = t1 - t0
 
-    # 4. /refresh (switch back identity)
-    http_client.expected_identity = "auth-server"
+    # 4. /refresh over the same auth channel used for /token
     t0 = time.perf_counter()
     oidc_client.refresh()
     t1 = time.perf_counter()
@@ -126,13 +150,16 @@ def bench_flow(mode: str, config: dict, server_config: dict) -> Dict[str, Any]:
 
     times['total_login_s'] = times['authorize_s'] + times['token_s']
 
+    auth_http_client.close()
+    resource_http_client.close()
+
     return times
 
 
 def run_benchmark(config: dict):
-    print("Starting Servers for OIDC Flow Benchmark...")
-    server_config = start_mock_servers()
-    time.sleep(1) # Let servers boot
+    print("Starting servers for OIDC Flow Benchmark...")
+    server_config = start_real_servers()
+    time.sleep(1)
 
     runs = config.get('runs', 100)
     results = {'kemtls': [], 'kemtls_pdk': []}
