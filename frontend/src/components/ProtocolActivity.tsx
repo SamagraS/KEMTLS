@@ -30,14 +30,16 @@ const ENTITY_META: Record<string, { label: string; icon: string; color: string }
 /* Which 2 entities interact at each step */
 function getStepEntities(stepId: string): [string, string] {
   const map: Record<string, [string, string]> = {
-    hello:    ['client', 'auth'],
-    server:   ['client', 'auth'],
-    derive:   ['client', 'auth'],
-    finished: ['client', 'auth'],
-    auth:     ['client', 'auth'],
-    token:    ['client', 'auth'],
-    bind:     ['client', 'auth'],
-    access:   ['client', 'resource'],
+    hello:           ['client', 'auth'],
+    server:          ['client', 'auth'],
+    derive:          ['client', 'auth'],
+    finished:        ['client', 'auth'],
+    authorize:       ['client', 'auth'],
+    account_auth:    ['client', 'auth'],
+    consent:         ['client', 'auth'],
+    token_exchange:  ['client', 'auth'],
+    session_bind:    ['client', 'auth'],
+    resource_access: ['client', 'resource'],
   };
   return map[stepId] || ['client', 'auth'];
 }
@@ -58,19 +60,28 @@ function getActivityEvents(stepId: string): ActivityEvent[] {
       { id: 'f1', from: 'client', to: 'auth', label: 'Finished', detail: 'Handshake MAC verification', type: 'verify', status: 'idle' },
       { id: 'f2', from: 'auth', to: 'client', label: 'Finished', detail: 'Server MAC verification', type: 'verify', status: 'idle' },
     ],
-    auth: [
-      { id: 'a1', from: 'client', to: 'auth', label: 'GET /authorize', detail: 'response_type=code&scope=openid&PKCE', type: 'data', status: 'idle' },
-      { id: 'a2', from: 'auth', to: 'client', label: 'Auth Code', detail: 'code=a8f3k2x9... + state', type: 'token', status: 'idle' },
+    authorize: [
+      { id: 'az1', from: 'client', to: 'auth', label: 'GET /authorize', detail: 'response_type=code&scope=openid&PKCE', type: 'data', status: 'idle' },
+      { id: 'az2', from: 'auth', to: 'client', label: 'Redirect', detail: '302 → accounts.google.com', type: 'data', status: 'idle' },
     ],
-    token: [
+    account_auth: [
+      { id: 'aa1', from: 'client', to: 'auth', label: 'Authenticate', detail: 'User selects account at IdP', type: 'verify', status: 'idle' },
+      { id: 'aa2', from: 'auth', to: 'client', label: 'Auth OK', detail: 'Session verified + MFA passed', type: 'verify', status: 'idle' },
+    ],
+    consent: [
+      { id: 'cn1', from: 'client', to: 'auth', label: 'Grant Consent', detail: 'User approves scopes', type: 'data', status: 'idle' },
+      { id: 'cn2', from: 'auth', to: 'client', label: 'Auth Code', detail: 'code=a8f3k2x9... + state', type: 'token', status: 'idle' },
+    ],
+    token_exchange: [
       { id: 't1', from: 'client', to: 'auth', label: 'POST /token', detail: 'auth_code + PKCE verifier', type: 'data', status: 'idle' },
       { id: 't2', from: 'auth', to: 'client', label: 'Token Response', detail: 'PQ-signed ID + Access + Refresh tokens', type: 'token', status: 'idle' },
     ],
-    bind: [
+    session_bind: [
       { id: 'b1', from: 'client', to: 'auth', label: 'Session Bind', detail: 'cnf.kbh = SHA256(exporter || sid)', type: 'verify', status: 'idle' },
+      { id: 'b2', from: 'auth', to: 'client', label: 'Binding Confirmed', detail: 'Session binding registered', type: 'verify', status: 'idle' },
     ],
-    access: [
-      { id: 'r1', from: 'client', to: 'resource', label: 'GET /userinfo', detail: 'Bearer token + PoP proof', type: 'data', status: 'idle' },
+    resource_access: [
+      { id: 'r1', from: 'client', to: 'resource', label: 'GET /userinfo', detail: 'Bearer token + session binding', type: 'data', status: 'idle' },
       { id: 'r2', from: 'resource', to: 'client', label: '200 OK', detail: 'User profile data', type: 'data', status: 'idle' },
     ],
   };

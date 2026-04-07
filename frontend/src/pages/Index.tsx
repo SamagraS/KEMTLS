@@ -4,6 +4,7 @@ import { CyberCursor } from '../components/CyberCursor';
 import { GridBackground } from '../components/GridBackground';
 import { useThreatPopups, THREATS } from '../components/ThreatPopup';
 import { ProtocolActivity } from '../components/ProtocolActivity';
+import { LoginPlatformPanel } from '../components/LoginPlatformPanel';
 
 /* ──────────────────────────────────────────
    Types
@@ -28,7 +29,7 @@ type FlowState = 'idle' | 'running' | 'paused' | 'done';
 type RunMode = 'full' | 'step';
 
 const SOCKET_URL = 'http://localhost:5002';
-const BACKEND_STEP_IDS = ['hello', 'server', 'derive', 'finished', 'auth', 'token', 'bind', 'access'] as const;
+const BACKEND_STEP_IDS = ['hello', 'server', 'derive', 'finished', 'authorize', 'account_auth', 'consent', 'token_exchange', 'session_bind', 'resource_access'] as const;
 
 /* ──────────────────────────────────────────
    Step definitions with explanations for click-and-resume
@@ -36,8 +37,8 @@ const BACKEND_STEP_IDS = ['hello', 'server', 'derive', 'finished', 'auth', 'toke
 const INITIAL_STEPS: FlowStep[] = [
   {
     id: 'hello', label: 'CLIENT HELLO',
-    detail: 'ML-KEM-768 key share + PKCE code_verifier',
-    explanation: 'The client generates an ML-KEM-768 key pair and sends the public key to the server. It also creates a PKCE code_verifier for later OIDC use. This uses lattice-based cryptography that is resistant to quantum attacks via Shor\'s algorithm.',
+    detail: 'ML-KEM-768 key share + cipher suites',
+    explanation: 'The client generates an ML-KEM-768 key pair and sends the public key to the server along with supported cipher suites. This uses lattice-based cryptography that is resistant to quantum attacks via Shor\'s algorithm.',
     status: 'idle',
   },
   {
@@ -59,27 +60,39 @@ const INITIAL_STEPS: FlowStep[] = [
     status: 'idle',
   },
   {
-    id: 'auth', label: 'OIDC AUTHORIZE',
-    detail: 'GET /authorize?response_type=code&scope=openid',
-    explanation: 'The client initiates the OpenID Connect authorization code flow over the now quantum-secure KEMTLS channel. PKCE (S256) prevents authorization code interception. The entire request is protected by post-quantum encryption.',
+    id: 'authorize', label: 'OIDC AUTHORIZE',
+    detail: 'GET /authorize → redirect to identity provider',
+    explanation: 'The client initiates the OpenID Connect authorization code flow over the now quantum-secure KEMTLS channel. The user is redirected to the identity provider (e.g. Google) with PKCE (S256) to prevent authorization code interception.',
     status: 'idle',
   },
   {
-    id: 'token', label: 'TOKEN EXCHANGE',
+    id: 'account_auth', label: 'ACCOUNT AUTH',
+    detail: 'User selects account + authenticates at IdP',
+    explanation: 'The user authenticates at the identity provider by selecting their account and completing any required authentication (password, MFA). This happens entirely at the IdP — the relying party never sees credentials.',
+    status: 'idle',
+  },
+  {
+    id: 'consent', label: 'CONSENT + CODE',
+    detail: 'User grants consent → auth code issued',
+    explanation: 'The identity provider presents the requested permissions (name, email, profile). When the user consents, an authorization code is issued and the user is redirected back to the relying party with the code and state parameter.',
+    status: 'idle',
+  },
+  {
+    id: 'token_exchange', label: 'TOKEN EXCHANGE',
     detail: 'POST /token → PQ-signed ID + Access + Refresh',
     explanation: 'The client exchanges the authorization code for tokens. The auth server signs all tokens with ML-DSA-65, a post-quantum digital signature algorithm. The PKCE verifier ensures only the legitimate client can complete this exchange.',
     status: 'idle',
   },
   {
-    id: 'bind', label: 'SESSION BINDING',
-    detail: 'cnf.kbh = SHA256(tls-exporter || session_id)',
-    explanation: 'The token is cryptographically bound to this specific TLS channel using the TLS Exporter. Even if tokens are stolen, they cannot be used from a different connection because the binding hash won\'t match.',
+    id: 'session_bind', label: 'SESSION BIND',
+    detail: 'cnf.kbh = SHA256(exporter || session_id)',
+    explanation: 'The token is cryptographically bound to this specific KEMTLS channel using the TLS Exporter. The binding hash is embedded in the cnf claim of the access token. Even if tokens are stolen, they cannot be used from a different connection because the binding verification will fail.',
     status: 'idle',
   },
   {
-    id: 'access', label: 'RESOURCE ACCESS',
+    id: 'resource_access', label: 'RESOURCE ACCESS',
     detail: 'GET /resource with Bearer token over KEMTLS',
-    explanation: 'The client calls the protected resource endpoint with the issued access token. The resource server verifies the token contract against the active KEMTLS session and either grants access or rejects if the session binding does not match.',
+    explanation: 'The client calls the protected resource endpoint with the issued access token. The resource server verifies the token binding against the active KEMTLS session before granting access.',
     status: 'idle',
   },
 ];
@@ -92,20 +105,22 @@ function makePlaceholderData(stepId: string): Record<string, string> {
     server: { ct_size: '1088 bytes', cert_alg: 'ML-DSA-65', cert_chain: '2 certs' },
     derive: { client_key: 'a1b2...f0e9 (32B)', server_key: 'c3d4...78ab (32B)', exporter: 'ZjRhY2Mx...OGM (32B)' },
     finished: { handshake_mac: 'HMAC-SHA256 ✓', replay_nonce: '0x7a3f...e1c0', latency: '2.1 ms' },
-    auth: { redirect_uri: 'http://localhost:3000/cb', state: 'rng_state_439f', code: 'a8f3k2x9m1b7...' },
-    token: { alg: 'ML-DSA-65', id_token_size: '7.8 KB', sig_size: '3293 bytes', refresh_bound: 'true' },
-    bind: { session_id: 'kemtls-001', binding_hash: 'ZjRhY2MxODM...', exporter_label: 'kemtls-session-v1' },
-    access: { resource: '/api/userinfo', pop_alg: 'ML-DSA-65', result: '200 OK – Access Granted' },
+    authorize: { redirect_uri: 'https://accounts.google.com/o/oauth2/v2/auth', state: 'rng_state_439f', scope: 'openid profile email', pkce: 'S256' },
+    account_auth: { provider: 'Google', method: 'session + MFA', account: 'user@gmail.com', status: 'authenticated' },
+    consent: { permissions: 'name, email, profile picture', code: 'a8f3k2x9m1b7...', state_verified: 'true' },
+    token_exchange: { alg: 'ML-DSA-65', id_token_size: '7.8 KB', sig_size: '3293 bytes', refresh_bound: 'true' },
+    session_bind: { session_id: 'kemtls-001', binding_hash: 'ZjRhY2MxODM...', binding_alg: 'HKDF-SHA256', exporter_label: 'kemtls-session-v1' },
+    resource_access: { resource: '/api/userinfo', auth: 'Bearer token', result: '200 OK – Access Granted' },
   };
   return data[stepId] || {};
 }
 
 /* Phase groupings for vertical flow layout */
 const PHASES = [
-  { label: 'KEMTLS HANDSHAKE', color: 'var(--cyan)', stepIds: ['hello', 'server', 'derive', 'finished'] },
-  { label: 'OIDC PROTOCOL', color: 'var(--magenta)', stepIds: ['auth', 'token'] },
-  { label: 'SESSION BIND', color: 'var(--violet)', stepIds: ['bind'] },
-  { label: 'RESOURCE', color: 'var(--lime)', stepIds: ['access'] },
+  { label: 'PQ TRANSPORT', color: 'var(--cyan)', stepIds: ['hello', 'server', 'derive', 'finished'] },
+  { label: 'OIDC LOGIN', color: 'var(--magenta)', stepIds: ['authorize', 'account_auth', 'consent'] },
+  { label: 'TOKEN SECURITY', color: 'var(--violet)', stepIds: ['token_exchange', 'session_bind'] },
+  { label: 'PLATFORM', color: 'var(--lime)', stepIds: ['resource_access'] },
 ];
 
 /* ──────────────────────────────────────────
@@ -342,10 +357,27 @@ export default function Index() {
       if (currentRunIdRef.current && data.runId && data.runId !== currentRunIdRef.current) return;
       const nextIdx = stepIndexById.current[data.nextStepId];
       if (nextIdx === undefined) return;
-      setCurrentStepIdx(nextIdx - 1);
+
+      // Interactive steps (account_auth, consent): the backend paused AT the step
+      // (step_start was emitted but step_complete was not). Keep the step as "running".
+      const INTERACTIVE_STEPS = ['account_auth', 'consent'];
+      const isInteractive = INTERACTIVE_STEPS.includes(data.nextStepId);
+
+      if (isInteractive) {
+        // Step is already 'running' from handshake_step_start — keep it that way.
+        setCurrentStepIdx(nextIdx);
+        setSelectedStep(data.nextStepId);
+      } else {
+        setCurrentStepIdx(nextIdx - 1);
+      }
+
       setFlowState('paused');
       setWaitingForClick(true);
-      addLog('info', `  ⏸ Paused — click step ${nextIdx + 1} to continue`);
+      if (isInteractive) {
+        addLog('info', `  ⏸ Awaiting user action on ${data.nextStepId.replace('_', ' ')}`);
+      } else {
+        addLog('info', `  ⏸ Paused — click step ${nextIdx + 1} to continue`);
+      }
     });
 
     socket.on('step_flow_complete', (data: { runId?: string }) => {
@@ -451,6 +483,12 @@ export default function Index() {
 
     socketRef.current?.emit('continue_step_flow', { runId: currentRunId });
   }, [runMode, waitingForClick, currentStepIdx, currentRunId]);
+
+  /* ────── Advance from login panel (no step ID validation needed) ────── */
+  const advanceFromLoginPanel = useCallback(() => {
+    if (runMode !== 'step' || !waitingForClick || flowState !== 'paused') return;
+    socketRef.current?.emit('continue_step_flow', { runId: currentRunId });
+  }, [runMode, waitingForClick, flowState, currentRunId]);
 
   const handleNodeClick = useCallback((stepId: string) => {
     advanceStepFlow(stepId);
@@ -558,23 +596,42 @@ export default function Index() {
 
         {/* Action buttons */}
         <div className="flex gap-2 ml-4">
-          <button
-            onClick={startFlow}
-            disabled={flowState === 'running' || flowState === 'paused'}
-            data-hover
-            className="px-5 py-1.5 font-display font-bold text-xs tracking-wider rounded-lg transition-all duration-300"
-            style={{
-              background: flowState === 'running' || flowState === 'paused'
-                ? 'rgba(255,171,0,0.1)'
-                : 'linear-gradient(135deg, rgba(0,229,255,0.2), rgba(255,0,229,0.15))',
-              border: `1px solid ${flowState === 'running' || flowState === 'paused' ? 'var(--amber)' : 'var(--cyan)'}`,
-              color: flowState === 'running' || flowState === 'paused' ? 'var(--amber)' : 'var(--cyan)',
-              boxShadow: flowState === 'running' || flowState === 'paused' ? 'var(--glow-amber)' : 'var(--glow-cyan)',
-              opacity: flowState === 'running' || flowState === 'paused' ? 0.6 : 1,
-            }}
-          >
-            {flowState === 'running' ? '◉ RUNNING...' : flowState === 'paused' ? '⏸ PAUSED' : flowState === 'done' ? '▶ RUN AGAIN' : '▶ START'}
-          </button>
+          {/* In step mode, flow starts from login panel — hide START, show status only */}
+          {runMode === 'full' && (
+            <button
+              onClick={startFlow}
+              disabled={flowState === 'running' || flowState === 'paused'}
+              data-hover
+              className="px-5 py-1.5 font-display font-bold text-xs tracking-wider rounded-lg transition-all duration-300"
+              style={{
+                background: flowState === 'running' || flowState === 'paused'
+                  ? 'rgba(255,171,0,0.1)'
+                  : 'linear-gradient(135deg, rgba(0,229,255,0.2), rgba(255,0,229,0.15))',
+                border: `1px solid ${flowState === 'running' || flowState === 'paused' ? 'var(--amber)' : 'var(--cyan)'}`,
+                color: flowState === 'running' || flowState === 'paused' ? 'var(--amber)' : 'var(--cyan)',
+                boxShadow: flowState === 'running' || flowState === 'paused' ? 'var(--glow-amber)' : 'var(--glow-cyan)',
+                opacity: flowState === 'running' || flowState === 'paused' ? 0.6 : 1,
+              }}
+            >
+              {flowState === 'running' ? '◉ RUNNING...' : flowState === 'paused' ? '⏸ PAUSED' : flowState === 'done' ? '▶ RUN AGAIN' : '▶ START'}
+            </button>
+          )}
+          {runMode === 'step' && flowState !== 'idle' && (
+            <div className="flex items-center gap-2 px-4 py-1.5 rounded-lg" style={{
+              background: flowState === 'running' ? 'rgba(255,171,0,0.08)' : flowState === 'paused' ? 'rgba(160,120,200,0.08)' : flowState === 'done' ? 'rgba(78,201,160,0.08)' : 'transparent',
+              border: `1px solid ${flowState === 'running' ? 'var(--amber)' : flowState === 'paused' ? 'var(--magenta)' : flowState === 'done' ? 'var(--lime)' : 'rgba(0,229,255,0.15)'}`,
+            }}>
+              <div className="w-2 h-2 rounded-full" style={{
+                background: flowState === 'running' ? 'var(--amber)' : flowState === 'paused' ? 'var(--magenta)' : 'var(--lime)',
+                animation: flowState !== 'done' ? 'pulse-glow 1s ease infinite' : 'none',
+              }} />
+              <span className="font-display text-xs tracking-wider" style={{
+                color: flowState === 'running' ? 'var(--amber)' : flowState === 'paused' ? 'var(--magenta)' : 'var(--lime)',
+              }}>
+                {flowState === 'running' ? 'RUNNING' : flowState === 'paused' ? 'PAUSED' : 'COMPLETE'}
+              </span>
+            </div>
+          )}
           <button
             onClick={resetFlow}
             data-hover
@@ -639,6 +696,20 @@ export default function Index() {
 
       {/* ═══ MAIN CONTENT ═══ */}
       <div className="flex-1 flex overflow-hidden relative z-10">
+        {/* ─── LEFT: Login Platform Panel (step mode only) ─── */}
+        {runMode === 'step' && (
+          <div className="flex-shrink-0 overflow-hidden" style={{ width: '25%', minWidth: '280px', maxWidth: '360px' }}>
+            <LoginPlatformPanel
+              steps={steps}
+              currentStepIdx={currentStepIdx}
+              flowState={flowState}
+              onLoginClick={runStepFlow}
+              onAccountSelect={advanceFromLoginPanel}
+              onConsentGrant={advanceFromLoginPanel}
+            />
+          </div>
+        )}
+
         {/* ─── CENTER: Vertical Flow + Protocol Activity (inline) ─── */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Scrollable flow area */}
@@ -857,7 +928,7 @@ function VerticalFlowVisualizer({ steps, selectedStep, flowState, runMode, waiti
             ✓ FLOW COMPLETE
           </div>
           <div className="text-sm font-code" style={{ color: 'var(--text-mid)' }}>
-            All 8 protocol steps executed successfully
+            All 10 protocol steps executed successfully
           </div>
           <div className="flex gap-6 mt-4 justify-center">
             <StatChip label="HANDSHAKE" value="2.1ms" color="var(--cyan)" />
