@@ -32,7 +32,7 @@ from .exporter import (
 from utils.encoding import base64url_encode, base64url_decode
 from utils.serialization import serialize_message, deserialize_message
 from utils.helpers import generate_random_string
-from utils.telemetry import KEMTLSHandshakeCollector
+
 
 def _decode_bytes_field(message: Dict[str, Any], field_name: str) -> bytes:
     """Decode a serialized Base64url field back to bytes."""
@@ -53,12 +53,14 @@ class ClientHandshake:
         expected_identity: str,
         ca_pk: Optional[bytes] = None,
         pdk_store: Optional[PDKTrustStore] = None,
-        mode: str = "auto"
+        mode: str = "auto",
+        collector: Optional[Any] = None
     ):
         self.expected_identity = expected_identity
         self.ca_pk = ca_pk
         self.pdk_store = pdk_store
         self.mode = mode
+        self.collector = collector
         self.transcript: List[bytes] = []
         self.client_random = generate_random_string(32)
         
@@ -68,12 +70,9 @@ class ClientHandshake:
         self.handshake_secret: Optional[bytes] = None
         self.client_fin_key: Optional[bytes] = None
         self.server_fin_key: Optional[bytes] = None
-        
-        self.telemetry = KEMTLSHandshakeCollector()
 
     def client_hello(self) -> bytes:
         """Generate ClientHello."""
-        self.telemetry.handshake_timer.start()
         supported_modes = ["baseline", "pdk"] if self.mode == "auto" else [self.mode]
         ch = {
             'type': 'ClientHello',
@@ -83,15 +82,17 @@ class ClientHandshake:
             'expected_identity': self.expected_identity
         }
         msg = serialize_message(ch)
-        self.telemetry.record_message_size("ClientHello", len(msg))
+        if self.collector:
+            self.collector.client_hello_size = len(msg)
         self.transcript.append(msg)
-        self.telemetry.handshake_timer.stop()
         return msg
 
     def process_server_hello(self, msg_bytes: bytes) -> Tuple[bytes, KEMTLSSession]:
         """Process ServerHello and return ClientKeyExchange."""
-        self.telemetry.handshake_timer.start()
         sh = deserialize_message(msg_bytes)
+        if self.collector:
+            self.collector.server_hello_size = len(msg_bytes)
+            self.collector.mode = sh.get('mode', 'kemtls')
         self.transcript.append(msg_bytes)
         
         if sh.get('version') != 'KEMTLS/1.0':
@@ -105,21 +106,29 @@ class ClientHandshake:
             cert = sh.get('cert')
             if not self.ca_pk:
                 raise ValueError("Baseline mode requires CA public key")
+            
+            import time
+            start_ns = time.perf_counter_ns()
             server_lt_pk = validate_certificate(cert, self.ca_pk, self.expected_identity)
+            if self.collector:
+                self.collector.cert_verify_ns = time.perf_counter_ns() - start_ns
+            
             trusted_key_id = None
         elif mode == 'pdk':
             key_id = sh.get('key_id')
             if not self.pdk_store:
                 raise ValueError("PDK mode requires PDK trust store")
-            self.telemetry.pdk_lookup_timer.start()
+            
+            import time
+            start_ns = time.perf_counter_ns()
             entry = self.pdk_store.resolve_expected_identity(self.expected_identity, key_id)
-            self.telemetry.pdk_lookup_timer.stop()
+            if self.collector:
+                self.collector.pdk_lookup_ns = time.perf_counter_ns() - start_ns
+            
             server_lt_pk = entry['ml_kem_public_key']
             trusted_key_id = key_id
         else:
             raise ValueError(f"Server selected unsupported mode: {mode}")
-
-        self.telemetry.mode = mode
 
         # 2. Key Exchange
         ct_eph, self.ss_eph = MLKEM768.encapsulate(server_eph_pk)
@@ -131,6 +140,8 @@ class ClientHandshake:
             'ct_longterm': ct_lt
         }
         msg = serialize_message(cke)
+        if self.collector:
+            self.collector.client_finish_size = len(msg)
         self.transcript.append(msg)
         
         # 3. Derive Handshake Secrets
@@ -150,11 +161,6 @@ class ClientHandshake:
             handshake_mode=sh['mode'],
             trusted_key_id=trusted_key_id,
         )
-        self.telemetry.session_id = session.session_id
-        self.telemetry.peer_identity = session.peer_identity
-        
-        self.telemetry.record_message_size("ClientKeyExchange", len(msg))
-        self.telemetry.handshake_timer.stop()
 
         return msg, session
 
@@ -164,7 +170,6 @@ class ClientHandshake:
         session: Optional[KEMTLSSession] = None,
     ) -> KEMTLSSession:
         """Verify ServerFinished and finalize session."""
-        self.telemetry.handshake_timer.start()
         t1 = compute_transcript_hash(self.transcript[:2])
         sf = deserialize_message(msg_bytes)
         
@@ -174,6 +179,9 @@ class ClientHandshake:
         if server_mac != expected_mac:
             raise ValueError("ServerFinished MAC verification failed")
             
+        if self.collector:
+            self.collector.server_finish_size = len(msg_bytes)
+
         self.transcript.append(msg_bytes)
         t2 = compute_transcript_hash(self.transcript[:3]) # Up to CKE
         t3 = compute_transcript_hash(self.transcript)    # Up to SF
@@ -206,19 +214,15 @@ class ClientHandshake:
         session.session_binding_id = derive_session_binding_id(exporter_secret)
         session.refresh_binding_id = derive_refresh_binding_id(exporter_secret)
 
-        self.telemetry.handshake_timer.stop()
         return session
 
     def client_finished(self) -> bytes:
         """Generate ClientFinished."""
-        self.telemetry.handshake_timer.start()
         t2 = compute_transcript_hash(self.transcript[:3])
         mac = hmac.new(self.client_fin_key, t2, hashlib.sha256).digest()
         cf = {'type': 'ClientFinished', 'mac': mac}
         msg = serialize_message(cf)
-        self.telemetry.record_message_size("ClientFinished", len(msg))
         self.transcript.append(msg)
-        self.telemetry.handshake_timer.stop()
         return msg
 
 
@@ -231,12 +235,14 @@ class ServerHandshake:
         server_identity: str,
         server_lt_sk: bytes,
         cert: Optional[Dict[str, Any]] = None,
-        pdk_key_id: Optional[str] = None
+        pdk_key_id: Optional[str] = None,
+        collector: Optional[Any] = None
     ):
         self.server_identity = server_identity
         self.server_lt_sk = server_lt_sk
         self.cert = cert
         self.pdk_key_id = pdk_key_id
+        self.collector = collector
         self.transcript: List[bytes] = []
         self.session_id = generate_random_string(16)
         
@@ -247,13 +253,12 @@ class ServerHandshake:
         self.handshake_secret: Optional[bytes] = None
         self.client_fin_key: Optional[bytes] = None
         self.server_fin_key: Optional[bytes] = None
-        
-        self.telemetry = KEMTLSHandshakeCollector()
 
     def process_client_hello(self, msg_bytes: bytes) -> bytes:
         """Process ClientHello and return ServerHello."""
-        self.telemetry.handshake_timer.start()
         ch = deserialize_message(msg_bytes)
+        if self.collector:
+            self.collector.client_hello_size = len(msg_bytes)
         self.transcript.append(msg_bytes)
         
         modes = ch.get('modes', [])
@@ -278,17 +283,17 @@ class ServerHandshake:
             sh['key_id'] = self.pdk_key_id
             
         msg = serialize_message(sh)
-        self.telemetry.mode = mode
-        self.telemetry.session_id = self.session_id
-        self.telemetry.record_message_size("ServerHello", len(msg))
+        if self.collector:
+            self.collector.server_hello_size = len(msg)
+            self.collector.mode = mode
         self.transcript.append(msg)
-        self.telemetry.handshake_timer.stop()
         return msg
 
     def process_client_key_exchange(self, msg_bytes: bytes) -> bytes:
         """Process ClientKeyExchange and return ServerFinished."""
-        self.telemetry.handshake_timer.start()
         cke = deserialize_message(msg_bytes)
+        if self.collector:
+            self.collector.client_finish_size = len(msg_bytes)
         self.transcript.append(msg_bytes)
         
         # 1. Decapsulate
@@ -312,14 +317,13 @@ class ServerHandshake:
         mac = hmac.new(self.server_fin_key, t1, hashlib.sha256).digest()
         sf = {'type': 'ServerFinished', 'mac': mac}
         msg = serialize_message(sf)
-        self.telemetry.record_message_size("ServerFinished", len(msg))
+        if self.collector:
+            self.collector.server_finish_size = len(msg)
         self.transcript.append(msg)
-        self.telemetry.handshake_timer.stop()
         return msg
 
     def verify_client_finished(self, msg_bytes: bytes) -> KEMTLSSession:
         """Verify ClientFinished and finalize session."""
-        self.telemetry.handshake_timer.start()
         t2 = compute_transcript_hash(self.transcript[:3])
         cf = deserialize_message(msg_bytes)
         
@@ -339,7 +343,7 @@ class ServerHandshake:
         client_iv = hkdf_expand_label(app_traffic['client_application_traffic_secret'], b"iv", b"", 12)
         server_iv = hkdf_expand_label(app_traffic['server_application_traffic_secret'], b"iv", b"", 12)
 
-        session = KEMTLSSession(
+        return KEMTLSSession(
             session_id=self.session_id,
             peer_identity="client", # In this simplified flow, client is anonymous
             handshake_mode=sh['mode'],
@@ -354,8 +358,7 @@ class ServerHandshake:
             session_binding_id=derive_session_binding_id(exporter_secret),
             refresh_binding_id=derive_refresh_binding_id(exporter_secret)
         )
-        self.telemetry.handshake_timer.stop()
-        return session
+
 
 class KEMTLSHandshake:
     """Backward-compatible facade kept for legacy demos/tests."""
