@@ -1,0 +1,8 @@
+{
+  "os": "Windows",
+  "kernel": "10",
+  "python_version": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "liboqs_version": "0.15.0",
+  "cpu_info": "AMD64 Family 23 Model 24 Stepping 1, AuthenticAMD",
+  "architecture": "AMD64"
+}
