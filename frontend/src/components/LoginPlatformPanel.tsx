@@ -43,27 +43,23 @@ function deriveStage(steps: FlowStep[], currentStepIdx: number, flowState: strin
   if (flowState === 'idle') return 0;
   if (flowState === 'done') return 6;
 
-  // Node 0-4 (hello through authorize)
-  if (currentStepIdx >= 0 && currentStepIdx < 4) return 1;
+  // Node 0-3 (hello through finished)
+  if (currentStepIdx >= 0 && currentStepIdx <= 3) return 1;
   
-  // Node 5 (account_auth)
-  if (currentStepIdx === 4) return 2;
+  // Node 4 (authorize) and Node 5 (account_auth) -> Stage 2 (Choose Account)
+  if (currentStepIdx === 4 ) return 2;
   
-  // Node 6 (consent)
+  // Node 6 (consent) -> Stage 3 (Consent)
   if (currentStepIdx === 5) return 3;
   
-  // Node 7 (token_exchange)
+  // Node 7 (token_exchange) -> Stage 4 (Returning)
   if (currentStepIdx === 6) return 4;
   
-  // Node 8 (session_bind)
+  // Node 8 (session_bind) -> Stage 5 (Securing)
   if (currentStepIdx === 7) return 5;
   
   // Node 9 (resource_access)
-  if (currentStepIdx === 8) {
-    const resourceAccess = steps[8];
-    if (resourceAccess?.status === 'done') return 6;
-    return 6; // Just show dashboard once we reach resource access
-  }
+  if (currentStepIdx === 8 || currentStepIdx === 9) return 6;
 
   return 0;
 }
