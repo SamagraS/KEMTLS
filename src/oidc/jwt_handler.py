@@ -25,7 +25,12 @@ class PQJWT:
         kid: str = DEFAULT_KID,
         token_type: str = ID_TOKEN_TYPE,
         extra_headers: Optional[Dict[str, Any]] = None,
+        collector: Optional[Any] = None,
     ) -> str:
+        if collector:
+            import time
+            start_ns = time.perf_counter_ns()
+            
         if not isinstance(claims, dict):
             raise TypeError("claims must be a dictionary")
         if not isinstance(kid, str) or not kid:
@@ -49,14 +54,32 @@ class PQJWT:
         payload_b64 = base64url_encode(serialize_message(claims))
         signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
         signature = MLDSA65.sign(issuer_sk, signing_input)
+        
+        if collector:
+            self._record_signing_metrics(collector, start_ns, header_b64, payload_b64, signature)
+            
         return f"{header_b64}.{payload_b64}.{base64url_encode(signature)}"
+
+    def _record_signing_metrics(self, collector, start_ns, header_b64, payload_b64, signature):
+        import time
+        collector.t_jwt_sign_ns += (time.perf_counter_ns() - start_ns)
+        collector.token_sizes["id_token" if collector.token_sizes.get("id_token") == 0 else "access_token"] = \
+            len(header_b64) + len(payload_b64) + len(base64url_encode(signature)) + 2 # dots
+        collector.token_sizes["header"] = len(header_b64)
+        collector.token_sizes["payload"] = len(payload_b64)
+        collector.token_sizes["signature"] = len(base64url_encode(signature))
 
     def verify_jwt(
         self,
         token: str,
         issuer_pk: bytes,
         expected_type: Optional[str] = None,
+        collector: Optional[Any] = None,
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        if collector:
+            import time
+            start_ns = time.perf_counter_ns()
+            
         if not isinstance(token, str):
             raise TypeError("token must be a string")
 
@@ -84,6 +107,10 @@ class PQJWT:
         if not MLDSA65.verify(issuer_pk, signing_input, signature):
             raise ValueError("invalid JWT signature")
 
+        if collector:
+            import time
+            collector.t_verify_ns += (time.perf_counter_ns() - start_ns)
+
         return header, payload
 
     def create_id_token(
@@ -92,9 +119,10 @@ class PQJWT:
         issuer_sk: bytes,
         issuer_pk: Optional[bytes] = None,
         kid: str = DEFAULT_KID,
+        collector: Optional[Any] = None,
         **_: Any,
     ) -> str:
-        return self.sign_jwt(claims, issuer_sk, kid=kid, token_type=ID_TOKEN_TYPE)
+        return self.sign_jwt(claims, issuer_sk, kid=kid, token_type=ID_TOKEN_TYPE, collector=collector)
 
     def create_access_token(
         self,
@@ -102,6 +130,7 @@ class PQJWT:
         issuer_sk: bytes,
         kid: str = DEFAULT_KID,
         cnf_claim: Optional[Dict[str, Any]] = None,
+        collector: Optional[Any] = None,
     ) -> str:
         token_claims = dict(claims)
         if cnf_claim is not None:
@@ -110,7 +139,7 @@ class PQJWT:
             if set(cnf_claim) != {"cnf"}:
                 raise ValueError("cnf_claim must only contain the 'cnf' field")
             token_claims.update(cnf_claim)
-        return self.sign_jwt(token_claims, issuer_sk, kid=kid, token_type=ACCESS_TOKEN_TYPE)
+        return self.sign_jwt(token_claims, issuer_sk, kid=kid, token_type=ACCESS_TOKEN_TYPE, collector=collector)
 
     def validate_id_token(
         self,
@@ -119,8 +148,9 @@ class PQJWT:
         issuer: Optional[str] = None,
         audience: Optional[str] = None,
         nonce: Optional[str] = None,
+        collector: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        _, claims = self.verify_jwt(token, issuer_pk, expected_type=ID_TOKEN_TYPE)
+        _, claims = self.verify_jwt(token, issuer_pk, expected_type=ID_TOKEN_TYPE, collector=collector)
         self._validate_registered_claims(claims, issuer=issuer, audience=audience)
         if nonce is not None and claims.get("nonce") != nonce:
             raise ValueError("nonce mismatch")
@@ -132,8 +162,9 @@ class PQJWT:
         issuer_pk: bytes,
         issuer: Optional[str] = None,
         audience: Optional[str] = None,
+        collector: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        _, claims = self.verify_jwt(token, issuer_pk, expected_type=ACCESS_TOKEN_TYPE)
+        _, claims = self.verify_jwt(token, issuer_pk, expected_type=ACCESS_TOKEN_TYPE, collector=collector)
         self._validate_registered_claims(claims, issuer=issuer, audience=audience)
         return claims
 

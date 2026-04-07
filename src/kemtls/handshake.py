@@ -53,12 +53,14 @@ class ClientHandshake:
         expected_identity: str,
         ca_pk: Optional[bytes] = None,
         pdk_store: Optional[PDKTrustStore] = None,
-        mode: str = "auto"
+        mode: str = "auto",
+        collector: Optional[Any] = None
     ):
         self.expected_identity = expected_identity
         self.ca_pk = ca_pk
         self.pdk_store = pdk_store
         self.mode = mode
+        self.collector = collector
         self.transcript: List[bytes] = []
         self.client_random = generate_random_string(32)
         
@@ -80,12 +82,17 @@ class ClientHandshake:
             'expected_identity': self.expected_identity
         }
         msg = serialize_message(ch)
+        if self.collector:
+            self.collector.client_hello_size = len(msg)
         self.transcript.append(msg)
         return msg
 
     def process_server_hello(self, msg_bytes: bytes) -> Tuple[bytes, KEMTLSSession]:
         """Process ServerHello and return ClientKeyExchange."""
         sh = deserialize_message(msg_bytes)
+        if self.collector:
+            self.collector.server_hello_size = len(msg_bytes)
+            self.collector.mode = sh.get('mode', 'kemtls')
         self.transcript.append(msg_bytes)
         
         if sh.get('version') != 'KEMTLS/1.0':
@@ -99,13 +106,25 @@ class ClientHandshake:
             cert = sh.get('cert')
             if not self.ca_pk:
                 raise ValueError("Baseline mode requires CA public key")
+            
+            import time
+            start_ns = time.perf_counter_ns()
             server_lt_pk = validate_certificate(cert, self.ca_pk, self.expected_identity)
+            if self.collector:
+                self.collector.cert_verify_ns = time.perf_counter_ns() - start_ns
+            
             trusted_key_id = None
         elif mode == 'pdk':
             key_id = sh.get('key_id')
             if not self.pdk_store:
                 raise ValueError("PDK mode requires PDK trust store")
+            
+            import time
+            start_ns = time.perf_counter_ns()
             entry = self.pdk_store.resolve_expected_identity(self.expected_identity, key_id)
+            if self.collector:
+                self.collector.pdk_lookup_ns = time.perf_counter_ns() - start_ns
+            
             server_lt_pk = entry['ml_kem_public_key']
             trusted_key_id = key_id
         else:
@@ -121,6 +140,8 @@ class ClientHandshake:
             'ct_longterm': ct_lt
         }
         msg = serialize_message(cke)
+        if self.collector:
+            self.collector.client_finish_size = len(msg)
         self.transcript.append(msg)
         
         # 3. Derive Handshake Secrets
@@ -158,6 +179,9 @@ class ClientHandshake:
         if server_mac != expected_mac:
             raise ValueError("ServerFinished MAC verification failed")
             
+        if self.collector:
+            self.collector.server_finish_size = len(msg_bytes)
+
         self.transcript.append(msg_bytes)
         t2 = compute_transcript_hash(self.transcript[:3]) # Up to CKE
         t3 = compute_transcript_hash(self.transcript)    # Up to SF
@@ -211,12 +235,14 @@ class ServerHandshake:
         server_identity: str,
         server_lt_sk: bytes,
         cert: Optional[Dict[str, Any]] = None,
-        pdk_key_id: Optional[str] = None
+        pdk_key_id: Optional[str] = None,
+        collector: Optional[Any] = None
     ):
         self.server_identity = server_identity
         self.server_lt_sk = server_lt_sk
         self.cert = cert
         self.pdk_key_id = pdk_key_id
+        self.collector = collector
         self.transcript: List[bytes] = []
         self.session_id = generate_random_string(16)
         
@@ -231,6 +257,8 @@ class ServerHandshake:
     def process_client_hello(self, msg_bytes: bytes) -> bytes:
         """Process ClientHello and return ServerHello."""
         ch = deserialize_message(msg_bytes)
+        if self.collector:
+            self.collector.client_hello_size = len(msg_bytes)
         self.transcript.append(msg_bytes)
         
         modes = ch.get('modes', [])
@@ -255,12 +283,17 @@ class ServerHandshake:
             sh['key_id'] = self.pdk_key_id
             
         msg = serialize_message(sh)
+        if self.collector:
+            self.collector.server_hello_size = len(msg)
+            self.collector.mode = mode
         self.transcript.append(msg)
         return msg
 
     def process_client_key_exchange(self, msg_bytes: bytes) -> bytes:
         """Process ClientKeyExchange and return ServerFinished."""
         cke = deserialize_message(msg_bytes)
+        if self.collector:
+            self.collector.client_finish_size = len(msg_bytes)
         self.transcript.append(msg_bytes)
         
         # 1. Decapsulate
@@ -284,6 +317,8 @@ class ServerHandshake:
         mac = hmac.new(self.server_fin_key, t1, hashlib.sha256).digest()
         sf = {'type': 'ServerFinished', 'mac': mac}
         msg = serialize_message(sf)
+        if self.collector:
+            self.collector.server_finish_size = len(msg)
         self.transcript.append(msg)
         return msg
 

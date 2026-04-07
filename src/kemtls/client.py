@@ -22,12 +22,14 @@ class KEMTLSClient:
         expected_identity: str,
         ca_pk: Optional[bytes] = None,
         pdk_store: Optional[PDKTrustStore] = None,
-        mode: str = "auto"
+        mode: str = "auto",
+        collector: Optional[Any] = None
     ):
         self.expected_identity = expected_identity
         self.ca_pk = ca_pk
         self.pdk_store = pdk_store
         self.mode = mode
+        self.collector = collector
         self.session = None
         self.sock: Optional[socket.socket] = None
         self.record_layer = None
@@ -52,11 +54,15 @@ class KEMTLSClient:
         sock.connect((host, port))
 
         # 1. Perform Handshake
+        if self.collector:
+            self.collector.start_hct()
+
         handshake = ClientHandshake(
             self.expected_identity,
             self.ca_pk,
             self.pdk_store,
             self.mode,
+            collector=self.collector
         )
 
         # Message 1: ClientHello
@@ -65,6 +71,9 @@ class KEMTLSClient:
 
         # Message 2: ServerHello
         sh_bytes = self._read_msg(sock)
+        if self.collector:
+            self.collector.record_ttfb()
+            
         cke_bytes, session = handshake.process_server_hello(sh_bytes)
         self._send_msg(sock, cke_bytes)
 
@@ -81,6 +90,10 @@ class KEMTLSClient:
         self.record_layer = for_client(session, sock)
         self.connected_host = host
         self.connected_port = port
+        
+        if self.collector:
+            self.collector.end_hct()
+            
         print(f"Handshake complete. Mode: {session.handshake_mode}")
 
     def _request_over_active_connection(

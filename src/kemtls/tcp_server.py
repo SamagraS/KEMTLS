@@ -100,11 +100,19 @@ class KEMTLSTCPServer:
         """Individual client connection handler."""
         try:
             # 1. Perform Handshake
+            collector = None
+            if hasattr(self, "get_collector") and callable(self.get_collector):
+                collector = self.get_collector()
+            
+            if collector:
+                collector.start_hct()
+
             handshake = ServerHandshake(
                 self.server_identity,
                 self.server_lt_sk,
                 self.cert,
-                self.pdk_key_id
+                self.pdk_key_id,
+                collector=collector
             )
             
             # Message 1: ClientHello
@@ -120,6 +128,12 @@ class KEMTLSTCPServer:
             # Message 3: ClientFinished
             cf_bytes = self._read_msg(client_sock)
             session = handshake.verify_client_finished(cf_bytes)
+            
+            if collector:
+                collector.end_hct()
+                # Server side metrics can be stored elsewhere or returned via a hook
+                if hasattr(self, "on_handshake_complete") and callable(self.on_handshake_complete):
+                    self.on_handshake_complete(collector.get_metrics())
             
             print(f"Handshake complete. Mode: {session.handshake_mode}")
             

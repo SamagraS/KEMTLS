@@ -58,24 +58,37 @@ class TokenEndpoint:
         refresh_token: Optional[str] = None,
         session=None,
         code_data: Optional[Dict[str, Any]] = None,
+        collector: Optional[Any] = None,
         **_: Any,
     ) -> Dict[str, Any]:
+        if collector:
+            collector.start_token_request()
+            
         if grant_type == "authorization_code":
-            return self._handle_authorization_code_grant(
+            res = self._handle_authorization_code_grant(
                 client_id=client_id,
                 redirect_uri=redirect_uri,
                 code=code,
                 code_verifier=code_verifier,
                 session=session,
                 code_data=code_data,
+                collector=collector
             )
-        if grant_type == "refresh_token":
-            return self._handle_refresh_token_grant(
+        elif grant_type == "refresh_token":
+            res = self._handle_refresh_token_grant(
                 client_id=client_id,
                 refresh_token=refresh_token,
                 session=session,
+                collector=collector
             )
-        return {"error": "unsupported_grant_type"}
+        else:
+            res = {"error": "unsupported_grant_type"}
+            
+        if collector:
+            collector.end_token_request()
+            # If successful, we can optionally return the metrics here or caller handles it
+            
+        return res
 
     def _handle_authorization_code_grant(
         self,
@@ -86,6 +99,7 @@ class TokenEndpoint:
         code_verifier: Optional[str],
         session,
         code_data: Optional[Dict[str, Any]],
+        collector: Optional[Any] = None,
     ) -> Dict[str, Any]:
         if session is None:
             return {
@@ -144,7 +158,7 @@ class TokenEndpoint:
             return {"error": "invalid_grant", "error_description": "PKCE verification failed"}
 
         try:
-            return self._issue_authorization_code_tokens(record_data, session)
+            return self._issue_authorization_code_tokens(record_data, session, collector=collector)
         except ValueError as exc:
             return {"error": "invalid_request", "error_description": str(exc)}
 
@@ -154,6 +168,7 @@ class TokenEndpoint:
         client_id: Optional[str],
         refresh_token: Optional[str],
         session,
+        collector: Optional[Any] = None,
     ) -> Dict[str, Any]:
         if session is None:
             return {
@@ -213,6 +228,7 @@ class TokenEndpoint:
             self.issuer_sk,
             kid=self.signing_kid,
             cnf_claim=access_cnf_claim,
+            collector=collector
         )
         return {
             "access_token": access_token,
@@ -226,6 +242,7 @@ class TokenEndpoint:
         self,
         code_data: Dict[str, Any],
         session,
+        collector: Optional[Any] = None,
     ) -> Dict[str, Any]:
         scopes = code_data["scope"].split()
         issued_at = get_timestamp()
@@ -251,6 +268,7 @@ class TokenEndpoint:
             id_claims,
             self.issuer_sk,
             kid=self.signing_kid,
+            collector=collector
         )
         try:
             access_cnf_claim = build_access_token_binding_claim(session)
@@ -263,6 +281,7 @@ class TokenEndpoint:
             self.issuer_sk,
             kid=self.signing_kid,
             cnf_claim=access_cnf_claim,
+            collector=collector
         )
         refresh_expiry = get_timestamp() + self.refresh_token_lifetime_seconds
         issued_refresh_token = self.refresh_token_store.issue_token(

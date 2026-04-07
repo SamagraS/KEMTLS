@@ -33,7 +33,11 @@ class UserInfoEndpoint:
         self,
         access_token: str,
         session=None,
+        collector: Optional[Any] = None,
     ) -> Tuple[Dict[str, Any], int]:
+        if collector:
+            collector.start_userinfo_request()
+            
         if not isinstance(access_token, str) or not access_token:
             return {"error": "invalid_token"}, 401
         if session is None:
@@ -45,17 +49,32 @@ class UserInfoEndpoint:
                 self.issuer_pk,
                 issuer=self.issuer,
                 audience=self.audience,
+                collector=collector
             )
         except Exception:
+            if collector:
+                collector.end_userinfo_request()
             return {"error": "invalid_token"}, 401
+            
+        import time
+        start_binding_ns = time.perf_counter_ns()
+        binding_valid = verify_access_token_binding_claim(claims, session)
+        if collector:
+            collector.t_binding_verify_ns = time.perf_counter_ns() - start_binding_ns
 
-        if not verify_access_token_binding_claim(claims, session):
+        if not binding_valid:
+            if collector:
+                collector.end_userinfo_request()
             return {"error": "binding_mismatch"}, 401
 
         scopes = str(claims.get("scope", "")).split()
         response = self.claims_processor.get_user_claims(str(claims["sub"]), scopes)
         if "email_verified" in claims:
             response["email_verified"] = claims["email_verified"]
+            
+        if collector:
+            collector.end_userinfo_request()
+            
         return response, 200
 
     def register_routes(self, app, get_session=None) -> None:
