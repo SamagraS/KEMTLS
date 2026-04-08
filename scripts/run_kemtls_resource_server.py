@@ -45,7 +45,7 @@ def create_rs_app(host: str, auth_port: int, config: dict | None = None):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the KEMTLS resource server")
-    parser.add_argument("--transport", choices=["tcp", "quic"], default="tcp")
+    parser.add_argument("--transport", choices=["tcp", "quic"], default="quic")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=4434)
     parser.add_argument("--auth-port", type=int, default=4433)

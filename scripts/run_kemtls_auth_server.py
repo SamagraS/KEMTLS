@@ -75,7 +75,7 @@ def create_auth_app(host: str, port: int, transport: str, config: dict | None = 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the KEMTLS authorization server")
-    parser.add_argument("--transport", choices=["tcp", "quic"], default="tcp")
+    parser.add_argument("--transport", choices=["tcp", "quic"], default="quic")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=4433)
     args = parser.parse_args()

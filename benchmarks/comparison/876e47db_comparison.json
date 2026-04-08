@@ -1,0 +1,67 @@
+{
+  "local_metrics": {
+    "kemtls_handshake_ms": 7.885528999999997,
+    "kemtls_pdk_handshake_ms": 5.7328090000000005,
+    "t_authorize_ms": 9.112830999999998,
+    "t_token_ms": 18.859828,
+    "t_auth_total_ms": 86.96563100000002,
+    "crypto_latency_us": 621.534775000002
+  },
+  "comparisons": [
+    {
+      "reference_id": "schardong_2023_pq_oidc",
+      "source": "Schardong et al.",
+      "year": 2023,
+      "metric": "t_authorize_ms",
+      "cited_value": 41.0,
+      "local_value": 9.1128,
+      "delta_pct": -77.77,
+      "environment": "paper_reported",
+      "measured": false
+    },
+    {
+      "reference_id": "schardong_2023_pq_oidc",
+      "source": "Schardong et al.",
+      "year": 2023,
+      "metric": "t_token_ms",
+      "cited_value": 27.0,
+      "local_value": 18.8598,
+      "delta_pct": -30.15,
+      "environment": "paper_reported",
+      "measured": false
+    },
+    {
+      "reference_id": "schardong_2023_pq_oidc",
+      "source": "Schardong et al.",
+      "year": 2023,
+      "metric": "t_auth_total_ms",
+      "cited_value": 18.5,
+      "local_value": 86.9656,
+      "delta_pct": 370.08,
+      "environment": "paper_reported",
+      "measured": false
+    },
+    {
+      "reference_id": "schardong_2023_pq_oidc",
+      "source": "Schardong et al.",
+      "year": 2023,
+      "metric": "kemtls_handshake_ms",
+      "cited_value": 8.5,
+      "local_value": 7.8855,
+      "delta_pct": -7.23,
+      "environment": "paper_reported",
+      "measured": false
+    },
+    {
+      "reference_id": "cloudflare_kemtls",
+      "source": "Cloudflare",
+      "year": 2023,
+      "metric": "kemtls_handshake_ms",
+      "cited_value": 8.92,
+      "local_value": 7.8855,
+      "delta_pct": -11.6,
+      "environment": "paper_reported",
+      "measured": false
+    }
+  ]
+}
