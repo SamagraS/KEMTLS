@@ -33,6 +33,17 @@ def compute_stats(arr):
         'p95': percentiles(arr, 95)
     }
 
+
+def trim_authorization_warmup(samples):
+    """Drop the first authorization sample when multiple runs are present.
+
+    The first auth run is typically a cold-start outlier because it includes
+    initial imports, Rust backend loading, socket setup, and server warm-up.
+    """
+    if len(samples) <= 1:
+        return samples
+    return samples[1:]
+
 def main():
     results_dir = Path('results')
     if not results_dir.exists():
@@ -68,12 +79,14 @@ def main():
         aggregated['oidc_flow_s'] = {}
         
         for mode, runs in data.items():
+            authorize_samples = trim_authorization_warmup([r['authorize_s'] for r in runs])
             aggregated['oidc_flow_s'][mode] = {
-                'authorize': compute_stats([r['authorize_s'] for r in runs]),
+                'authorize': compute_stats(authorize_samples),
                 'token': compute_stats([r['token_s'] for r in runs]),
                 'resource': compute_stats([r['resource_s'] for r in runs]),
                 'refresh': compute_stats([r['refresh_s'] for r in runs]),
                 'total_login': compute_stats([r['total_login_s'] for r in runs]),
+                'authorize_warmup_trimmed': len(runs) - len(authorize_samples),
             }
 
     # 3. Process Crypto Timings

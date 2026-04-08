@@ -180,6 +180,22 @@ def load_benchmark_results(results_dir: str) -> Dict[str, Any]:
     return results
 
 
+def _authorization_note(benchmark_data: Dict[str, Any]) -> str:
+    aggregated = benchmark_data.get("aggregated", {})
+    flow = aggregated.get("oidc_flow_s", {})
+    if not isinstance(flow, dict):
+        return ""
+
+    trimmed_total = 0
+    for mode_data in flow.values():
+        if isinstance(mode_data, dict):
+            trimmed_total += int(mode_data.get("authorize_warmup_trimmed", 0) or 0)
+
+    if trimmed_total > 0:
+        return f"Authorization averages exclude {trimmed_total} warm-up sample(s)."
+    return ""
+
+
 def extract_our_results(benchmark_data: Dict[str, Any]) -> Dict[str, Any]:
     """Extract our timing data in comparable format"""
     our_data = {}
@@ -412,7 +428,7 @@ def plot_end_to_end_comparison(our_data: Dict[str, float], output_dir: str):
     plt.close()
 
 
-def generate_comparison_report(our_data: Dict[str, float], output_dir: str):
+def generate_comparison_report(our_data: Dict[str, float], output_dir: str, benchmark_data: Dict[str, Any]):
     """Generate comprehensive comparison report"""
     
     report_lines = [
@@ -427,6 +443,10 @@ def generate_comparison_report(our_data: Dict[str, float], output_dir: str):
         "  4. PQ-OIDC baseline",
         "",
     ]
+
+    auth_note = _authorization_note(benchmark_data)
+    if auth_note:
+        report_lines.extend([auth_note, ""])
     
     # Crypto comparison
     report_lines.extend([
@@ -540,7 +560,7 @@ def main():
     plot_end_to_end_comparison(our_data, output_dir)
     
     # Generate text report
-    generate_comparison_report(our_data, output_dir)
+    generate_comparison_report(our_data, output_dir, benchmark_data)
     
     print()
     print("="*80)
