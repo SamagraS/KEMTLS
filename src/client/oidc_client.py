@@ -124,6 +124,7 @@ class OIDCClient:
         metadata = resp.get('kemtls_metadata', {})
         self.telemetry['handshakes'].append({
             'mode': metadata.get('mode'),
+            'transport': metadata.get('transport', getattr(self.http_client, 'transport', 'tcp')),
             'duration_ms': duration,
             'session_id': metadata.get('session_id')
         })
@@ -132,7 +133,8 @@ class OIDCClient:
             self.telemetry['tokens'].append({
                 'type': 'access',
                 'size_bytes': len(self.access_token),
-                'binding_claim': metadata.get('session_binding_id')
+                'binding_claim': metadata.get('session_binding_id'),
+                'transport': metadata.get('transport', getattr(self.http_client, 'transport', 'tcp')),
             })
             
         # Try to pull detailed metrics from server response if endpoint injected them

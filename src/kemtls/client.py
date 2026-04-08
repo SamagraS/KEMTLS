@@ -10,6 +10,8 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from .pdk import PDKTrustStore
+from .quic_client import KEMTLSQUICClientTransport
+from .quic_client import request_over_transport as request_over_quic_transport
 from .tcp_transport import KEMTLSTCPClientTransport, request_over_transport
 
 
@@ -43,6 +45,14 @@ class KEMTLSClient:
     def _create_transport(self, transport: str):
         if transport == "tcp":
             return KEMTLSTCPClientTransport(
+                expected_identity=self.expected_identity,
+                ca_pk=self.ca_pk,
+                pdk_store=self.pdk_store,
+                mode=self.mode,
+                collector=self.collector,
+            )
+        if transport == "quic":
+            return KEMTLSQUICClientTransport(
                 expected_identity=self.expected_identity,
                 ca_pk=self.ca_pk,
                 pdk_store=self.pdk_store,
@@ -86,17 +96,30 @@ class KEMTLSClient:
         """
         try:
             self._sync_transport_config()
-            response, session = request_over_transport(
-                self.transport,
-                host=host,
-                port=port,
-                method=method,
-                path=path,
-                headers=headers,
-                body=body,
-                keep_alive=keep_alive,
-                header_mutator=header_mutator,
-            )
+            if self.transport_name == "quic":
+                response, session = request_over_quic_transport(
+                    self.transport,
+                    host=host,
+                    port=port,
+                    method=method,
+                    path=path,
+                    headers=headers,
+                    body=body,
+                    keep_alive=keep_alive,
+                    header_mutator=header_mutator,
+                )
+            else:
+                response, session = request_over_transport(
+                    self.transport,
+                    host=host,
+                    port=port,
+                    method=method,
+                    path=path,
+                    headers=headers,
+                    body=body,
+                    keep_alive=keep_alive,
+                    header_mutator=header_mutator,
+                )
             self._sync_transport_state()
             return response, session
         except Exception as e:

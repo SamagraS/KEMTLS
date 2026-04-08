@@ -51,6 +51,7 @@ class HandshakeSessionState:
     run_id: str = ""
     client_sid: str = ""
     mode: str = "auto"
+    transport: str = "tcp"
     step_index: int = 0
     auto_advance: bool = False
     status: str = "idle"
@@ -82,6 +83,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 _active_session: Optional[HandshakeSessionState] = None
 _active_run_id: Optional[str] = None
+_STEP_FLOW_TRANSPORT = "quic"
 
 
 def _now_ms() -> int:
@@ -169,7 +171,13 @@ def _reset_active_run(message: Optional[str] = None) -> None:
         _emit_event("step_flow_reset", {"timestamp": _now_ms()})
 
 
-def _initialize_state(mode: str, run_id: str, auto_advance: bool = False, client_sid: str = "") -> HandshakeSessionState:
+def _initialize_state(
+    mode: str,
+    transport: str,
+    run_id: str,
+    auto_advance: bool = False,
+    client_sid: str = "",
+) -> HandshakeSessionState:
     material = _load_auth_material()
     oidc_runtime = _load_oidc_runtime_config()
     http_client = KEMTLSHttpClient(
@@ -177,6 +185,7 @@ def _initialize_state(mode: str, run_id: str, auto_advance: bool = False, client
         pdk_store=None,
         expected_identity=material["server_identity"],
         mode=mode,
+        transport=transport,
         keep_alive=True,
     )
     oidc_issuer_url = "kemtls://127.0.0.1:4433"
@@ -191,6 +200,7 @@ def _initialize_state(mode: str, run_id: str, auto_advance: bool = False, client
         pdk_store=None,
         expected_identity="resource-server",
         mode=mode,
+        transport=transport,
         keep_alive=True,
     )
     binding_public_key, binding_secret_key = http_client.get_binding_keypair()
@@ -213,6 +223,7 @@ def _initialize_state(mode: str, run_id: str, auto_advance: bool = False, client
         run_id=run_id,
         client_sid=client_sid,
         mode=mode,
+        transport=transport,
         auto_advance=auto_advance,
         status="running",
         client=client,
@@ -264,6 +275,7 @@ def _emit_state_snapshot(sid_override: Optional[str] = None) -> None:
             "hasActiveRun": True,
             "runId": state.run_id,
             "mode": state.mode,
+            "transport": state.transport,
             "status": state.status,
             "stepIndex": state.step_index,
             "currentStepId": current_step_id,
@@ -680,14 +692,16 @@ def on_disconnect() -> None:
 def on_start_step_flow(payload: Optional[Dict[str, Any]] = None) -> None:
     global _active_session, _active_run_id
     mode = str((payload or {}).get("mode", "auto"))
+    transport = _STEP_FLOW_TRANSPORT
     auto_advance = bool((payload or {}).get("autoAdvance", False))
     _active_run_id = uuid.uuid4().hex
-    _active_session = _initialize_state(mode, _active_run_id, auto_advance=auto_advance, client_sid=request.sid)
+    _active_session = _initialize_state(mode, transport, _active_run_id, auto_advance=auto_advance, client_sid=request.sid)
 
     emit(
         "step_flow_started",
         {
             "mode": mode,
+            "transport": transport,
             "autoAdvance": auto_advance,
             "timestamp": _now_ms(),
             "runId": _active_run_id,
@@ -746,5 +760,5 @@ def on_get_step_flow_state() -> None:
 
 
 if __name__ == "__main__":
-    print("Starting step flow server on http://127.0.0.1:5002")
+    print(f"Starting step flow server on http://127.0.0.1:5002 using {_STEP_FLOW_TRANSPORT.upper()} transport")
     socketio.run(app, host="127.0.0.1", port=5002, allow_unsafe_werkzeug=True)

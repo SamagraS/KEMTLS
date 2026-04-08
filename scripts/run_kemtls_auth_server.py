@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from kemtls.tcp_server import KEMTLSTCPServer
+from kemtls.quic_server import KEMTLSQUICServer
 from oidc.auth_endpoints import InMemoryClientRegistry
 from servers.auth_server_app import create_auth_server_app
 from utils.encoding import base64url_decode
@@ -92,7 +93,7 @@ def main():
     print(f"Auth server PDK key id: {as_pdk_key_id}")
 
     app = create_auth_app()
-    server = KEMTLSTCPServer(
+    server = KEMTLSQUICServer(
         app=app,
         server_identity="auth-server",
         server_lt_sk=as_lt_sk,
@@ -102,7 +103,7 @@ def main():
         port=4433,
     )
 
-    print("Starting Auth Server on port 4433...")
+    print("Starting Auth Server on port 4433 using QUIC transport...")
     server.start()
 
 

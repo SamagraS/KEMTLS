@@ -28,6 +28,7 @@ class KEMTLSHttpClient:
         pdk_store: Optional[PDKTrustStore] = None,
         expected_identity: str = "server",
         mode: str = "auto",
+        transport: str = "tcp",
         keep_alive: bool = False,
         binding_public_key: Optional[bytes] = None,
         binding_secret_key: Optional[bytes] = None,
@@ -45,6 +46,7 @@ class KEMTLSHttpClient:
         self.pdk_store = pdk_store
         self.expected_identity = expected_identity
         self.mode = mode
+        self.transport = transport
         self.keep_alive = keep_alive
         self.binding_public_key = binding_public_key
         self.binding_secret_key = binding_secret_key
@@ -54,7 +56,8 @@ class KEMTLSHttpClient:
             expected_identity=expected_identity,
             ca_pk=ca_pk,
             pdk_store=pdk_store,
-            mode=mode
+            mode=mode,
+            transport=transport,
         )
 
     def _ensure_binding_keypair(self) -> Tuple[bytes, bytes]:
@@ -104,6 +107,11 @@ class KEMTLSHttpClient:
         self.client.ca_pk = self.ca_pk
         self.client.pdk_store = self.pdk_store
         self.client.mode = self.mode
+        if self.client.transport_name != self.transport:
+            self.client.close()
+            self.client.transport_name = self.transport
+            self.client.transport = self.client._create_transport(self.transport)
+        self.client.transport_name = self.transport
 
         parsed = urlparse(url)
         if parsed.scheme != "kemtls":
@@ -149,6 +157,7 @@ class KEMTLSHttpClient:
         # Attach session metadata
         resp_dict['kemtls_metadata'] = {
             'mode': session.handshake_mode,
+            'transport': getattr(session, 'transport', self.transport),
             'session_id': session.session_id,
             'session_binding_id': session.session_binding_id,
             'trusted_key_id': session.trusted_key_id

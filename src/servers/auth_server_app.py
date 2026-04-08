@@ -64,6 +64,8 @@ def create_auth_server_app(
         jwks_uri=config.get("jwks_uri"),
         introspection_endpoint=config.get("introspection_endpoint"),
         kemtls_modes_supported=config.get("kemtls_modes_supported"),
+        kemtls_transports_supported=config.get("kemtls_transports_supported"),
+        kemtls_default_transport=config.get("kemtls_default_transport", "tcp"),
         kemtls_session_binding_supported=config.get(
             "kemtls_session_binding_supported",
             True,

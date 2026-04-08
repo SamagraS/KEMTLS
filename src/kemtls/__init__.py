@@ -38,12 +38,18 @@ from .exporter import (
 from .client import KEMTLSClient
 from .transport import KEMTLSTransport
 from .tcp_transport import KEMTLSTCPClientTransport
+from .quic_client import KEMTLSQUICClientTransport
 
 # Optional dependency: Flask is only required for TCP server integration.
 try:
     from .tcp_server import KEMTLSTCPServer
 except ModuleNotFoundError:
     KEMTLSTCPServer = None
+
+try:
+    from .quic_server import KEMTLSQUICServer
+except ModuleNotFoundError:
+    KEMTLSQUICServer = None
 
 __all__ = [
     "ClientHandshake",
@@ -65,7 +71,11 @@ __all__ = [
     "KEMTLSClient",
     "KEMTLSTransport",
     "KEMTLSTCPClientTransport",
+    "KEMTLSQUICClientTransport",
 ]
 
 if KEMTLSTCPServer is not None:
     __all__.append("KEMTLSTCPServer")
+
+if KEMTLSQUICServer is not None:
+    __all__.append("KEMTLSQUICServer")

@@ -54,7 +54,7 @@ def load_config():
 
 
 def run_demo(mode="auto"):
-    print(f"\n{'='*20} Starting Demo (Mode: {mode}) {'='*20}")
+    print(f"\n{'='*20} Starting Demo (Mode: {mode}, Transport: quic) {'='*20}")
     config = load_config()
     
     # 1. Initialize OIDC Client
@@ -62,7 +62,8 @@ def run_demo(mode="auto"):
         ca_pk=config['ca_pk'],
         pdk_store=config['pdk_store'],
         expected_identity="auth-server",
-        mode=mode
+        mode=mode,
+        transport="quic",
     )
     
     client = OIDCClient(

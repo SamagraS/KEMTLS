@@ -18,6 +18,8 @@ class DiscoveryEndpoint:
         jwks_uri: Optional[str] = None,
         introspection_endpoint: Optional[str] = None,
         kemtls_modes_supported: Optional[Iterable[str]] = None,
+        kemtls_transports_supported: Optional[Iterable[str]] = None,
+        kemtls_default_transport: str = "tcp",
         kemtls_session_binding_supported: bool = True,
         scopes_supported: Optional[Iterable[str]] = None,
     ):
@@ -28,6 +30,8 @@ class DiscoveryEndpoint:
         self.jwks_uri = jwks_uri or f"{self.issuer_url}/jwks"
         self.introspection_endpoint = introspection_endpoint
         self.kemtls_modes_supported = list(kemtls_modes_supported or ("baseline", "pdk", "auto"))
+        self.kemtls_transports_supported = list(kemtls_transports_supported or ("tcp", "quic"))
+        self.kemtls_default_transport = kemtls_default_transport
         self.kemtls_session_binding_supported = bool(kemtls_session_binding_supported)
         self.scopes_supported = list(scopes_supported or ("openid", "profile", "email"))
 
@@ -48,6 +52,8 @@ class DiscoveryEndpoint:
             "kemtls_supported": True,
             "kemtls_session_binding_supported": self.kemtls_session_binding_supported,
             "kemtls_modes_supported": self.kemtls_modes_supported,
+            "kemtls_transports_supported": self.kemtls_transports_supported,
+            "kemtls_default_transport": self.kemtls_default_transport,
         }
         if self.introspection_endpoint:
             metadata["introspection_endpoint"] = self.introspection_endpoint
