@@ -295,7 +295,8 @@ __all__ = [
     "get_build_profile",
     "key_schedule",
     "serialization",
-    "record_layer",
+    "record_"
+    "layer",
     "handshake",
     "http",
     "jwt",

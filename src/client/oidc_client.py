@@ -116,6 +116,8 @@ class OIDCClient:
             
         # Parse Response
         token_data = resp.get('body', {})
+        token_data["_http_request_bytes"] = resp.get("kemtls_metadata", {}).get("request_bytes", 0)
+        token_data["_http_response_bytes"] = resp.get("kemtls_metadata", {}).get("response_bytes", 0)
         self.access_token = token_data.get('access_token')
         self.refresh_token = token_data.get('refresh_token')
         self.id_token = token_data.get('id_token')
@@ -183,6 +185,8 @@ class OIDCClient:
             raise ValueError(f"Token refresh failed: {resp.get('body')}")
             
         token_data = resp.get('body', {})
+        token_data["_http_request_bytes"] = resp.get("kemtls_metadata", {}).get("request_bytes", 0)
+        token_data["_http_response_bytes"] = resp.get("kemtls_metadata", {}).get("response_bytes", 0)
         self.access_token = token_data.get('access_token')
         self.refresh_token = token_data.get('refresh_token')
         
@@ -206,7 +210,8 @@ class OIDCClient:
             ca_pk=self.http_client.ca_pk,
             pdk_store=self.http_client.pdk_store,
             expected_identity=self.http_client.expected_identity,
-            mode=self.http_client.mode
+            mode=self.http_client.mode,
+            transport=getattr(self.http_client, 'transport', 'tcp'),
         )
         
         headers = {

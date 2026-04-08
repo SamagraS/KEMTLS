@@ -60,11 +60,16 @@ def main() -> None:
     handshake = _load_rows(raw_dir / "handshake_results.csv")
     oidc = _load_rows(raw_dir / "oidc_results.csv")
     load = _load_rows(raw_dir / "load_results.csv")
+    artifacts = _load_rows(raw_dir / "artifacts_results.csv")
 
     _bar(_group_avg(crypto, "operation", "latency_us"), "Crypto Latency (us)", out_dir / "crypto_latency.png")
-    _bar(_group_avg(handshake, "scenario", "hct_client_ms"), "Handshake HCT by Scenario (ms)", out_dir / "handshake_hct.png")
-    _bar(_group_avg(oidc, "scenario", "t_auth_total_ms"), "OIDC Total Auth Time by Scenario (ms)", out_dir / "oidc_auth_total.png")
+    handshake_group = "handshake_mode" if handshake and "handshake_mode" in handshake[0] else "scenario"
+    oidc_group = "handshake_mode" if oidc and "handshake_mode" in oidc[0] else "scenario"
+    load_group = "concurrency"
+    _bar(_group_avg(handshake, handshake_group, "hct_client_ms"), "Handshake HCT by Mode (ms)", out_dir / "handshake_hct.png")
+    _bar(_group_avg(oidc, oidc_group, "t_auth_total_ms"), "OIDC Total Auth Time by Mode (ms)", out_dir / "oidc_auth_total.png")
     _bar(_group_avg(load, "concurrency", "throughput_req_sec"), "Load Throughput by Concurrency", out_dir / "load_throughput.png")
+    _bar(_group_avg(artifacts, "scenario", "s_id_token_bytes"), "ID Token Size by Mode (bytes)", out_dir / "artifact_id_token_size.png")
 
 
 if __name__ == "__main__":

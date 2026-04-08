@@ -15,7 +15,7 @@ $ErrorActionPreference = 'Stop'
 function Convert-ToWslPath([string]$windowsPath) {
     $resolved = (Resolve-Path -Path $windowsPath).Path
     $drive = $resolved.Substring(0,1).ToLowerInvariant()
-    $rest = $resolved.Substring(2).Replace('\\','/')
+    $rest = ($resolved.Substring(2) -replace '\\','/')
     return "/mnt/$drive$rest"
 }
 
@@ -24,7 +24,7 @@ if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-$repoWindows = 'D:\project\KEMTLS'
+$repoWindows = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $repoWsl = Convert-ToWslPath $repoWindows
 
 $runner = if ($Profile -eq 'linux_netem') { 'benchmarks/collect/run_all_netem.sh' } else { 'benchmarks/collect/run_all_wsl.sh' }
@@ -32,7 +32,7 @@ $runner = if ($Profile -eq 'linux_netem') { 'benchmarks/collect/run_all_netem.sh
 $cmd = @(
     'bash',
     '-lc',
-    "cd '$repoWsl' && chmod +x $runner && ./$runner --profile '$Profile' --protocols '$Protocols' --suites '$Suites' --repeat $Repeat --warmup $Warmup --scenario-set '$ScenarioSet'"
+    "cd '$repoWsl' && sed -i 's/\r$//' $runner benchmarks/setup_netem.sh benchmarks/collect/capture_segments.sh && bash $runner --profile '$Profile' --protocols '$Protocols' --suites '$Suites' --repeat $Repeat --warmup $Warmup --scenario-set '$ScenarioSet'"
 )
 
 Write-Host '[*] Executing in WSL:'

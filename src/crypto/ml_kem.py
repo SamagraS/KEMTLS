@@ -1,20 +1,58 @@
-"""ML-KEM-768 wrapper built on liboqs-python."""
+"""ML-KEM-768 wrapper with liboqs and pqcrypto backends."""
 
 from __future__ import annotations
 
-from typing import Tuple
+import os
+from pathlib import Path
+from typing import Any, Callable, Tuple
 
 
-def _load_oqs():
+def _has_oqs_shared_library() -> bool:
+    install_root = Path(os.environ.get("OQS_INSTALL_PATH", Path.home() / "_oqs"))
+    search_dirs = [install_root / "lib", install_root / "lib64", install_root / "bin"]
+    library_names = ("liboqs.so", "liboqs.so.0", "liboqs.dylib", "oqs.dll", "liboqs.dll")
+    for directory in search_dirs:
+        if not directory.exists():
+            continue
+        for library_name in library_names:
+            if (directory / library_name).exists():
+                return True
+    return False
+
+
+def _load_oqs_backend():
+    if os.name != "nt" and not _has_oqs_shared_library():
+        return None
     try:
         import oqs  # type: ignore
+    except Exception:
+        return None
+    try:
+        with oqs.KeyEncapsulation("ML-KEM-768"):
+            return oqs
+    except Exception:
+        return None
+
+
+def _load_pqcrypto_backend():
+    try:
+        from pqcrypto.kem import ml_kem_768  # type: ignore
     except ModuleNotFoundError as exc:
         raise RuntimeError(
-            "liboqs-python is required for ML-KEM-768 operations. "
-            "Install the 'oqs' package and liboqs runtime before using this module."
+            "ML-KEM-768 operations require either a working 'oqs/liboqs' runtime "
+            "or 'pqcrypto.kem.ml_kem_768'."
         ) from exc
+    return ml_kem_768
 
-    return oqs
+
+def _with_backend(
+    oqs_op: Callable[[Any], Tuple[bytes, ...] | bytes],
+    pqcrypto_op: Callable[[Any], Tuple[bytes, ...] | bytes],
+):
+    oqs = _load_oqs_backend()
+    if oqs is not None:
+        return oqs_op(oqs)
+    return pqcrypto_op(_load_pqcrypto_backend())
 
 
 class MLKEM768:
@@ -29,11 +67,17 @@ class MLKEM768:
     @classmethod
     def generate_keypair(cls) -> Tuple[bytes, bytes]:
         """Generate a fresh ML-KEM-768 keypair."""
-        oqs = _load_oqs()
-        with oqs.KeyEncapsulation(cls.ALGORITHM) as kem:
-            public_key = kem.generate_keypair()
-            secret_key = kem.export_secret_key()
 
+        def _oqs_generate(oqs_module):
+            with oqs_module.KeyEncapsulation(cls.ALGORITHM) as kem:
+                public_key = kem.generate_keypair()
+                secret_key = kem.export_secret_key()
+            return public_key, secret_key
+
+        def _pq_generate(backend):
+            return backend.generate_keypair()
+
+        public_key, secret_key = _with_backend(_oqs_generate, _pq_generate)
         cls._validate_public_key(public_key)
         cls._validate_secret_key(secret_key)
         return public_key, secret_key
@@ -43,10 +87,14 @@ class MLKEM768:
         """Encapsulate to an ML-KEM-768 public key."""
         cls._validate_public_key(public_key)
 
-        oqs = _load_oqs()
-        with oqs.KeyEncapsulation(cls.ALGORITHM) as kem:
-            ciphertext, shared_secret = kem.encap_secret(public_key)
+        def _oqs_encap(oqs_module):
+            with oqs_module.KeyEncapsulation(cls.ALGORITHM) as kem:
+                return kem.encap_secret(public_key)
 
+        def _pq_encap(backend):
+            return backend.encrypt(public_key)
+
+        ciphertext, shared_secret = _with_backend(_oqs_encap, _pq_encap)
         cls._validate_ciphertext(ciphertext)
         cls._validate_shared_secret(shared_secret)
         return ciphertext, shared_secret
@@ -57,10 +105,14 @@ class MLKEM768:
         cls._validate_secret_key(secret_key)
         cls._validate_ciphertext(ciphertext)
 
-        oqs = _load_oqs()
-        with oqs.KeyEncapsulation(cls.ALGORITHM, secret_key) as kem:
-            shared_secret = kem.decap_secret(ciphertext)
+        def _oqs_decap(oqs_module):
+            with oqs_module.KeyEncapsulation(cls.ALGORITHM, secret_key) as kem:
+                return kem.decap_secret(ciphertext)
 
+        def _pq_decap(backend):
+            return backend.decrypt(secret_key, ciphertext)
+
+        shared_secret = _with_backend(_oqs_decap, _pq_decap)
         cls._validate_shared_secret(shared_secret)
         return shared_secret
 

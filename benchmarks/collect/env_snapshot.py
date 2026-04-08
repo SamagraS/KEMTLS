@@ -88,9 +88,9 @@ def _get_package_version(package_name: str) -> Optional[str]:
 
 def _get_oqs_version() -> Optional[str]:
     try:
-        import oqs  # type: ignore
+        from importlib.metadata import version
 
-        return getattr(oqs, "oqs_version", lambda: None)()
+        return version("liboqs-python")
     except Exception:
         return None
 

@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional, Tuple
 from urllib.parse import urlparse, urlencode
 from kemtls.client import KEMTLSClient
 from kemtls.pdk import PDKTrustStore
+from kemtls.tcp_transport import build_http_request
 from oidc.session_binding import build_binding_proof_headers
 from rust_ext import http as rust_http
 from crypto.ml_dsa import MLDSA65
@@ -153,6 +154,21 @@ class KEMTLSHttpClient:
         
         # Parse Response
         resp_dict = self._parse_response(raw_response)
+        effective_headers = dict(full_headers)
+        self._attach_binding_headers(
+            effective_headers,
+            session,
+            method=method,
+            path=request_path,
+        )
+        request_bytes = build_http_request(
+            host,
+            method,
+            path,
+            headers=effective_headers,
+            body=body,
+            keep_alive=self.keep_alive,
+        )
         
         # Attach session metadata
         resp_dict['kemtls_metadata'] = {
@@ -160,7 +176,9 @@ class KEMTLSHttpClient:
             'transport': getattr(session, 'transport', self.transport),
             'session_id': session.session_id,
             'session_binding_id': session.session_binding_id,
-            'trusted_key_id': session.trusted_key_id
+            'trusted_key_id': session.trusted_key_id,
+            'request_bytes': len(request_bytes),
+            'response_bytes': len(raw_response),
         }
         
         return resp_dict

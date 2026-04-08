@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-IFACE="${IFACE:-lo}"
+IFACE="${IFACE:-eth0}"
 
 usage() {
     echo "Usage: $0 apply <scenario>|clear|show"
@@ -21,25 +21,39 @@ apply_scenario() {
 
     case "$scenario" in
         LAN)
-            sudo tc qdisc add dev "$IFACE" root netem delay 0.5ms
+            sudo tc qdisc add dev "$IFACE" root handle 1: htb default 10
+            sudo tc class add dev "$IFACE" parent 1: classid 1:10 htb rate 1000mbit
+            sudo tc qdisc add dev "$IFACE" parent 1:10 handle 10: netem delay 0ms
             ;;
         FAST_WAN)
-            sudo tc qdisc add dev "$IFACE" root netem delay 10ms
+            sudo tc qdisc add dev "$IFACE" root handle 1: htb default 10
+            sudo tc class add dev "$IFACE" parent 1: classid 1:10 htb rate 100mbit
+            sudo tc qdisc add dev "$IFACE" parent 1:10 handle 10: netem delay 10ms
             ;;
         TYPICAL_WAN)
-            sudo tc qdisc add dev "$IFACE" root netem delay 30ms
+            sudo tc qdisc add dev "$IFACE" root handle 1: htb default 10
+            sudo tc class add dev "$IFACE" parent 1: classid 1:10 htb rate 20mbit
+            sudo tc qdisc add dev "$IFACE" parent 1:10 handle 10: netem delay 40ms
             ;;
         SLOW_WAN)
-            sudo tc qdisc add dev "$IFACE" root netem delay 75ms
+            sudo tc qdisc add dev "$IFACE" root handle 1: htb default 10
+            sudo tc class add dev "$IFACE" parent 1: classid 1:10 htb rate 5mbit
+            sudo tc qdisc add dev "$IFACE" parent 1:10 handle 10: netem delay 100ms
             ;;
         LOSS_LOW)
-            sudo tc qdisc add dev "$IFACE" root netem delay 30ms loss gemodel 0.5% 20% 80% 0.1%
+            sudo tc qdisc add dev "$IFACE" root handle 1: htb default 10
+            sudo tc class add dev "$IFACE" parent 1: classid 1:10 htb rate 50mbit
+            sudo tc qdisc add dev "$IFACE" parent 1:10 handle 10: netem delay 15ms loss gemodel 1% 20% 0% 0%
             ;;
         LOSS_HIGH)
-            sudo tc qdisc add dev "$IFACE" root netem delay 30ms loss gemodel 2% 30% 70% 0.5%
+            sudo tc qdisc add dev "$IFACE" root handle 1: htb default 10
+            sudo tc class add dev "$IFACE" parent 1: classid 1:10 htb rate 10mbit
+            sudo tc qdisc add dev "$IFACE" parent 1:10 handle 10: netem delay 25ms loss gemodel 3% 20% 0% 0%
             ;;
         LOSS_SEVERE)
-            sudo tc qdisc add dev "$IFACE" root netem delay 30ms loss gemodel 5% 40% 60% 1%
+            sudo tc qdisc add dev "$IFACE" root handle 1: htb default 10
+            sudo tc class add dev "$IFACE" parent 1: classid 1:10 htb rate 5mbit
+            sudo tc qdisc add dev "$IFACE" parent 1:10 handle 10: netem delay 40ms loss gemodel 5% 20% 0% 0%
             ;;
         *)
             echo "Unknown scenario: $scenario"

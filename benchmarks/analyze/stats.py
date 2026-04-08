@@ -5,6 +5,11 @@ import random
 import statistics
 from typing import Dict, Iterable, List
 
+try:
+    from scipy.stats import bootstrap as scipy_bootstrap  # type: ignore
+except Exception:
+    scipy_bootstrap = None
+
 
 def percentile(values: List[float], p: float) -> float:
     if not values:
@@ -17,6 +22,21 @@ def percentile(values: List[float], p: float) -> float:
 def bootstrap_ci(values: List[float], *, alpha: float = 0.05, iterations: int = 1000) -> Dict[str, float]:
     if not values:
         return {"low": 0.0, "high": 0.0}
+    if scipy_bootstrap is not None and len(values) > 1:
+        try:
+            result = scipy_bootstrap(
+                (values,),
+                statistic=statistics.mean,
+                confidence_level=1.0 - alpha,
+                n_resamples=iterations,
+                method="BCa",
+            )
+            return {
+                "low": float(result.confidence_interval.low),
+                "high": float(result.confidence_interval.high),
+            }
+        except Exception:
+            pass
     means: List[float] = []
     n = len(values)
     for _ in range(iterations):

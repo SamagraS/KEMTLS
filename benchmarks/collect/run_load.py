@@ -3,15 +3,14 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import csv
-import hashlib
-import json
 import statistics
+import json
 import sys
 import time
 import uuid
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent.parent
@@ -19,113 +18,39 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from kemtls.handshake import ClientHandshake, ServerHandshake
-from kemtls.pdk import PDKTrustStore
-from oidc.auth_endpoints import InMemoryClientRegistry
-from servers.auth_server_app import create_auth_server_app
-from servers.resource_server_app import create_resource_server_app
-from telemetry.collector import KEMTLSHandshakeCollector, OIDCTokenCollector, OIDCUserinfoCollector
-from utils.encoding import base64url_decode, base64url_encode
-from utils.helpers import generate_random_string
+from client.kemtls_http_client import KEMTLSHttpClient
+from client.oidc_client import OIDCClient
+from telemetry.collector import KEMTLSHandshakeCollector
+
+from runtime_support import (
+    BENCH_CLIENT_ID,
+    BENCH_REDIRECT_URI,
+    BENCH_SCOPE,
+    BenchmarkStack,
+)
 
 
-def _load_keys() -> Dict[str, Any]:
-    base_dir = ROOT_DIR / "keys"
-    with (base_dir / "ca" / "ca_keys.json").open("r", encoding="utf-8") as file_handle:
-        ca_config = json.load(file_handle)
-    with (base_dir / "auth_server" / "as_config.json").open("r", encoding="utf-8") as file_handle:
-        as_config = json.load(file_handle)
-    with (base_dir / "resource_server" / "rs_config.json").open("r", encoding="utf-8") as file_handle:
-        rs_config = json.load(file_handle)
-    with (base_dir / "pdk" / "pdk_manifest.json").open("r", encoding="utf-8") as file_handle:
-        pdk_manifest = json.load(file_handle)
-
-    pdk_store = PDKTrustStore()
-    for entry in pdk_manifest:
-        pdk_store.add_entry(
-            entry["key_id"],
-            entry["identity"],
-            base64url_decode(entry["ml_kem_public_key"]),
-            metadata=entry.get("metadata"),
-        )
-
-    return {
-        "ca_pk": base64url_decode(ca_config["public_key"]),
-        "auth_jwt_pk": base64url_decode(as_config["jwt_signing_pk"]),
-        "auth_jwt_sk": base64url_decode(as_config["jwt_signing_sk"]),
-        "auth_sk": base64url_decode(as_config["longterm_sk"]),
-        "auth_cert": as_config["certificate"],
-        "auth_pdk_key_id": as_config.get("pdk_key_id", "as-key-1"),
-        "resource_jwt_aud": "client123",
-        "resource_sk": base64url_decode(rs_config["longterm_sk"]),
-        "resource_cert": rs_config["certificate"],
-        "pdk_store": pdk_store,
-    }
+def _protocol_modes(protocols: Iterable[str]) -> List[str]:
+    normalized = {str(item).lower() for item in protocols}
+    modes: List[str] = []
+    if "kemtls" in normalized or "baseline" in normalized:
+        modes.append("baseline")
+    if "kemtls_pdk" in normalized or "pdk" in normalized:
+        modes.append("pdk")
+    return modes or ["baseline", "pdk"]
 
 
-def _challenge(verifier: str) -> str:
-    return base64url_encode(hashlib.sha256(verifier.encode("ascii")).digest())
-
-
-def _build_apps(keys: Dict[str, Any]):
-    issuer_url = "https://issuer.example"
-    client_config = {
-        "client123": {"redirect_uris": ["https://client.example/cb"]},
-    }
-    auth_app = create_auth_server_app(
-        {
-            "issuer": issuer_url,
-            "issuer_public_key": keys["auth_jwt_pk"],
-            "issuer_secret_key": keys["auth_jwt_sk"],
-            "clients": client_config,
-            "demo_user": "alice",
-            "introspection_endpoint": f"{issuer_url}/introspect",
-            "kemtls_modes_supported": ["baseline", "pdk", "auto"],
-        },
-        stores={"client_registry": InMemoryClientRegistry(client_config)},
-    )
-    resource_app = create_resource_server_app(
-        {
-            "issuer": issuer_url,
-            "issuer_public_key": keys["auth_jwt_pk"],
-            "resource_audience": keys["resource_jwt_aud"],
-        }
-    )
-    return auth_app, resource_app
-
-
-def _build_session(mode: str, keys: Dict[str, Any]):
-    server_identity = "auth-server"
-    server_collector = KEMTLSHandshakeCollector()
-    client_collector = KEMTLSHandshakeCollector()
-
-    client = ClientHandshake(
-        expected_identity=server_identity,
-        ca_pk=keys["ca_pk"],
-        pdk_store=keys["pdk_store"],
+def _build_http_client(stack: BenchmarkStack, *, expected_identity: str, mode: str, keep_alive: bool) -> KEMTLSHttpClient:
+    client = KEMTLSHttpClient(
+        ca_pk=stack.keys["ca_pk"],
+        pdk_store=stack.keys["pdk_store"],
+        expected_identity=expected_identity,
         mode=mode,
-        collector=client_collector,
+        transport="tcp",
+        keep_alive=keep_alive,
     )
-    server = ServerHandshake(
-        server_identity=server_identity,
-        server_lt_sk=keys["auth_sk"],
-        cert=keys["auth_cert"],
-        pdk_key_id=keys["auth_pdk_key_id"],
-        collector=server_collector,
-    )
-
-    client_collector.start_hct()
-    server_collector.start_hct()
-    client_hello = client.client_hello()
-    server_hello = server.process_client_hello(client_hello)
-    client_key_exchange, client_session = client.process_server_hello(server_hello)
-    server_finished = server.process_client_key_exchange(client_key_exchange)
-    session = client.process_server_finished(server_finished, client_session)
-    server.verify_client_finished(client.client_finished())
-    client_collector.end_hct()
-    server_collector.end_hct()
-
-    return session, client_collector.get_metrics()
+    client.client.collector = KEMTLSHandshakeCollector()
+    return client
 
 
 def _percentile(values: List[float], p: float) -> float:
@@ -136,76 +61,52 @@ def _percentile(values: List[float], p: float) -> float:
     return float(ordered[idx])
 
 
-def _single_request(mode: str, keys: Dict[str, Any]) -> Dict[str, Any]:
+def _single_request(mode: str, stack: BenchmarkStack) -> Dict[str, Any]:
     start_ns = time.perf_counter_ns()
     try:
-        auth_app, resource_app = _build_apps(keys)
-        auth_endpoint = auth_app.extensions["auth_endpoint"]
-        token_endpoint = auth_app.extensions["token_endpoint"]
-        userinfo_endpoint = resource_app.extensions["userinfo_endpoint"]
-
-        session, handshake_metrics = _build_session(mode, keys)
-        verifier = generate_random_string(64)
-        authorize_result = auth_endpoint.handle_authorize_request(
-            client_id="client123",
-            redirect_uri="https://client.example/cb",
-            scope="openid profile email",
-            state=generate_random_string(16),
-            nonce=generate_random_string(16),
-            user_id="alice",
-            response_type="code",
-            code_challenge=_challenge(verifier),
-            code_challenge_method="S256",
+        auth_http = _build_http_client(stack, expected_identity="auth-server", mode=mode, keep_alive=True)
+        oidc_client = OIDCClient(
+            http_client=auth_http,
+            client_id=BENCH_CLIENT_ID,
+            issuer_url=stack.auth_url,
+            redirect_uri=BENCH_REDIRECT_URI,
         )
-        if "code" not in authorize_result:
+        auth_http.get(f"{stack.auth_url}/.well-known/openid-configuration")
+        authorize_resp = auth_http.get(oidc_client.start_auth(scope=BENCH_SCOPE))
+        code = authorize_resp.get("body", {}).get("code")
+        if authorize_resp.get("status") != 200 or not code:
             raise ValueError("authorize_error")
-
-        token_collector = OIDCTokenCollector()
-        token_collector.grant_type = "authorization_code"
-        token_result = token_endpoint.handle_token_request(
-            grant_type="authorization_code",
-            client_id="client123",
-            redirect_uri="https://client.example/cb",
-            code=authorize_result["code"],
-            code_verifier=verifier,
-            session=session,
-            collector=token_collector,
-        )
-        if "access_token" not in token_result:
+        token_result = oidc_client.exchange_code(code)
+        token = token_result.get("access_token")
+        if not token:
             raise ValueError("token_error")
 
-        userinfo_collector = OIDCUserinfoCollector()
-        userinfo_result, userinfo_status = userinfo_endpoint.handle_userinfo_request(
-            token_result["access_token"],
-            session=session,
-            collector=userinfo_collector,
+        resource_http = _build_http_client(stack, expected_identity="resource-server", mode=mode, keep_alive=False)
+        resource_http.set_binding_keypair(*auth_http.get_binding_keypair())
+        userinfo_resp = resource_http.get(
+            f"{stack.resource_url}/benchmark/userinfo",
+            headers={"Authorization": f"Bearer {token}"},
         )
-        if userinfo_status != 200:
-            raise ValueError(f"userinfo_error:{userinfo_result}")
+        if userinfo_resp.get("status") != 200:
+            raise ValueError("userinfo_error")
 
-        refresh_collector = OIDCTokenCollector()
-        refresh_collector.grant_type = "refresh_token"
-        refresh_result = token_endpoint.handle_token_request(
-            grant_type="refresh_token",
-            client_id="client123",
-            refresh_token=token_result["refresh_token"],
-            session=session,
-            collector=refresh_collector,
-        )
-        if "access_token" not in refresh_result:
+        refreshed = oidc_client.refresh()
+        if "access_token" not in refreshed:
             raise ValueError("refresh_error")
 
         end_ns = time.perf_counter_ns()
-        latency_ms = (end_ns - start_ns) / 1_000_000
-        return {
+        result = {
             "ok": True,
-            "latency_ms": latency_ms,
-            "t_auth_total_ms": latency_ms,
-            "t_token_ms": token_collector.get_metrics()["t_total_ns"] / 1_000_000,
-            "t_userinfo_ms": userinfo_collector.get_metrics()["t_total_ns"] / 1_000_000,
-            "t_tls_hs_ms": float(handshake_metrics["hct_ms"]),
+            "latency_ms": (end_ns - start_ns) / 1_000_000,
+            "t_auth_total_ms": (end_ns - start_ns) / 1_000_000,
+            "t_token_ms": float(token_result.get("_telemetry", {}).get("t_token_request_ms", 0.0)),
+            "t_userinfo_ms": float(userinfo_resp.get("body", {}).get("_telemetry", {}).get("t_userinfo_request_ms", 0.0)),
+            "t_tls_hs_ms": float(auth_http.client.collector.get_metrics()["hct_ms"]) + float(resource_http.client.collector.get_metrics()["hct_ms"]),
             "error_type": "",
         }
+        auth_http.close()
+        resource_http.close()
+        return result
     except Exception as exc:
         end_ns = time.perf_counter_ns()
         return {
@@ -219,11 +120,11 @@ def _single_request(mode: str, keys: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
-def _run_level(mode: str, keys: Dict[str, Any], total_requests: int, concurrency: int) -> Dict[str, Any]:
+def _run_level(mode: str, stack: BenchmarkStack, total_requests: int, concurrency: int) -> Dict[str, Any]:
     started = time.perf_counter()
     results: List[Dict[str, Any]] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
-        futures = [executor.submit(_single_request, mode, keys) for _ in range(total_requests)]
+        futures = [executor.submit(_single_request, mode, stack) for _ in range(total_requests)]
         for future in concurrent.futures.as_completed(futures):
             results.append(future.result())
     duration = max(time.perf_counter() - started, 1e-9)
@@ -267,8 +168,10 @@ def _run_level(mode: str, keys: Dict[str, Any], total_requests: int, concurrency
 def run_benchmark(config: Dict[str, Any]) -> Path:
     run_id = str(config.get("run_id") or uuid.uuid4().hex[:8])
     environment_profile = str(config.get("environment_profile", "wsl2_loopback"))
+    scenario = str((config.get("scenarios") or ["loopback"])[0])
     repeat = int(config.get("repeat", 1000))
     warmup = int(config.get("warmup", 50))
+    protocols = list(config.get("protocols", ["kemtls", "kemtls_pdk"]))
     concurrency_levels = [int(v) for v in config.get("load_concurrency_levels", [1, 5, 10, 25, 50, 100])]
     results_dir = Path(config.get("results_dir", "benchmarks/results"))
     raw_dir = results_dir / "raw" / run_id
@@ -276,52 +179,50 @@ def run_benchmark(config: Dict[str, Any]) -> Path:
 
     csv_path = raw_dir / "load_results.csv"
     summary_path = raw_dir / "load_summary.json"
-    keys = _load_keys()
 
     print("Running load benchmark suite...")
     print(f"[*] run_id={run_id}")
     print(f"[*] environment_profile={environment_profile}")
+    print(f"[*] scenario={scenario}")
     print(f"[*] warmup_requests={warmup} measured_requests={repeat}")
 
     rows: List[Dict[str, Any]] = []
-    summaries: Dict[str, Dict[str, Any]] = {"baseline": {}, "pdk": {}}
+    summaries: Dict[str, Dict[str, Any]] = {}
 
-    for mode in ("baseline", "pdk"):
-        for concurrency in concurrency_levels:
-            print(f"[*] {mode}: concurrency={concurrency} warmup")
-            if warmup > 0:
-                _run_level(mode, keys, warmup, concurrency)
-
-            print(f"[*] {mode}: concurrency={concurrency} measured")
-            result = _run_level(mode, keys, repeat, concurrency)
-            row = {
-                "run_id": run_id,
-                "protocol": "OIDC_LOAD",
-                "scenario": mode,
-                "concurrency": concurrency,
-                "total_requests": result["total_requests"],
-                "successes": result["successes"],
-                "failures": result["failures"],
-                "error_rate_pct": round(float(result["error_rate_pct"]), 3),
-                "throughput_req_sec": round(float(result["throughput_req_sec"]), 3),
-                "avg_latency_ms": round(float(result["avg_latency_ms"]), 3),
-                "p50_latency_ms": round(float(result["p50_latency_ms"]), 3),
-                "p95_latency_ms": round(float(result["p95_latency_ms"]), 3),
-                "p99_latency_ms": round(float(result["p99_latency_ms"]), 3),
-                "min_latency_ms": round(float(result["min_latency_ms"]), 3),
-                "max_latency_ms": round(float(result["max_latency_ms"]), 3),
-                "t_auth_total_ms_avg": round(float(result["t_auth_total_ms_avg"]), 3),
-                "t_token_ms_avg": round(float(result["t_token_ms_avg"]), 3),
-                "t_userinfo_ms_avg": round(float(result["t_userinfo_ms_avg"]), 3),
-                "t_tls_hs_ms_avg": round(float(result["t_tls_hs_ms_avg"]), 3),
-                "warmup_requests": warmup,
-                "environment_profile": environment_profile,
-            }
-            rows.append(row)
-            summaries[mode][str(concurrency)] = {
-                **row,
-                "errors": result["errors"],
-            }
+    with BenchmarkStack(transport="tcp") as stack:
+        stack.start_oidc_servers()
+        for mode in _protocol_modes(protocols):
+            summaries[mode] = {}
+            for concurrency in concurrency_levels:
+                if warmup > 0:
+                    _run_level(mode, stack, warmup, concurrency)
+                result = _run_level(mode, stack, repeat, concurrency)
+                row = {
+                    "run_id": run_id,
+                    "protocol": "OIDC_LOAD",
+                    "scenario": scenario,
+                    "handshake_mode": mode,
+                    "concurrency": concurrency,
+                    "total_requests": result["total_requests"],
+                    "successes": result["successes"],
+                    "failures": result["failures"],
+                    "error_rate_pct": round(float(result["error_rate_pct"]), 3),
+                    "throughput_req_sec": round(float(result["throughput_req_sec"]), 3),
+                    "avg_latency_ms": round(float(result["avg_latency_ms"]), 3),
+                    "p50_latency_ms": round(float(result["p50_latency_ms"]), 3),
+                    "p95_latency_ms": round(float(result["p95_latency_ms"]), 3),
+                    "p99_latency_ms": round(float(result["p99_latency_ms"]), 3),
+                    "min_latency_ms": round(float(result["min_latency_ms"]), 3),
+                    "max_latency_ms": round(float(result["max_latency_ms"]), 3),
+                    "t_auth_total_ms_avg": round(float(result["t_auth_total_ms_avg"]), 3),
+                    "t_token_ms_avg": round(float(result["t_token_ms_avg"]), 3),
+                    "t_userinfo_ms_avg": round(float(result["t_userinfo_ms_avg"]), 3),
+                    "t_tls_hs_ms_avg": round(float(result["t_tls_hs_ms_avg"]), 3),
+                    "warmup_requests": warmup,
+                    "environment_profile": environment_profile,
+                }
+                rows.append(row)
+                summaries[mode][str(concurrency)] = {**row, "errors": result["errors"]}
 
     with csv_path.open("w", newline="", encoding="utf-8") as file_handle:
         writer = csv.DictWriter(
@@ -330,6 +231,7 @@ def run_benchmark(config: Dict[str, Any]) -> Path:
                 "run_id",
                 "protocol",
                 "scenario",
+                "handshake_mode",
                 "concurrency",
                 "total_requests",
                 "successes",
@@ -360,7 +262,7 @@ def run_benchmark(config: Dict[str, Any]) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run real OIDC/KEMTLS load benchmarks")
+    parser = argparse.ArgumentParser(description="Run real socket-backed OIDC/KEMTLS load benchmarks")
     parser.add_argument("--config", default="../config.json")
     parser.add_argument("--results-dir", default=None)
     parser.add_argument("--run-id", default=None)

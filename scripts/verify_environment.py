@@ -47,24 +47,22 @@ def _check_import(module_name: str) -> Tuple[bool, str]:
 
 def _check_oqs_mechanisms() -> Tuple[bool, str]:
     try:
-        import oqs  # type: ignore
+        from crypto.ml_dsa import MLDSA65
+        from crypto.ml_kem import MLKEM768
 
-        get_kems = getattr(oqs, "get_enabled_kem_mechanisms", None) or getattr(
-            oqs, "get_enabled_KEM_mechanisms", None
-        )
-        get_sigs = getattr(oqs, "get_enabled_sig_mechanisms", None)
-        if get_kems is None or get_sigs is None:
-            return False, "oqs API missing enabled mechanism introspection functions"
+        pk_kem, sk_kem = MLKEM768.generate_keypair()
+        ct_kem, ss1 = MLKEM768.encapsulate(pk_kem)
+        ss2 = MLKEM768.decapsulate(sk_kem, ct_kem)
+        if ss1 != ss2:
+            return False, "ML-KEM-768 backend round-trip mismatch"
 
-        kems = set(get_kems())
-        sigs = set(get_sigs())
-        if "ML-KEM-768" not in kems:
-            return False, "liboqs missing ML-KEM-768 support"
-        if "ML-DSA-65" not in sigs:
-            return False, "liboqs missing ML-DSA-65 support"
-        return True, "liboqs exposes ML-KEM-768 and ML-DSA-65"
+        pk_sig, sk_sig = MLDSA65.generate_keypair()
+        sig = MLDSA65.sign(sk_sig, b"kemtls-verify-env")
+        if not MLDSA65.verify(pk_sig, b"kemtls-verify-env", sig):
+            return False, "ML-DSA-65 backend round-trip mismatch"
+        return True, "post-quantum backends expose ML-KEM-768 and ML-DSA-65"
     except Exception as exc:
-        return False, f"oqs capability check failed: {exc}"
+        return False, f"post-quantum backend check failed: {exc}"
 
 
 def _check_crypto_smoke() -> Tuple[bool, str]:
@@ -158,7 +156,6 @@ def run_checks(strict: bool) -> int:
         ("python", _check_python_version),
         ("cryptography", lambda: _check_import("cryptography")),
         ("pqcrypto", lambda: _check_import("pqcrypto")),
-        ("oqs", lambda: _check_import("oqs")),
         ("pytest", lambda: _check_import("pytest")),
         ("matplotlib", lambda: _check_import("matplotlib")),
         ("flask-stack", _check_flask_imports),

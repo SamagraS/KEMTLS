@@ -44,6 +44,10 @@ class KEMTLSHandshakeCollector(BaseCollector):
         self.server_hello_size: int = 0
         self.client_key_exchange_size: int = 0
         self.server_finished_size: int = 0
+        self.client_finished_size: int = 0
+
+        # Legacy aliases kept for compatibility with older instrumentation code.
+        self.server_finish_size: int = 0
         self.client_finish_size: int = 0
         
         # Mode and timing
@@ -65,21 +69,23 @@ class KEMTLSHandshakeCollector(BaseCollector):
 
     def get_metrics(self) -> Dict[str, Any]:
         """Return all handshake metrics as a dict."""
+        client_key_exchange_size = max(self.client_key_exchange_size, self.client_finish_size)
+        server_finished_size = max(self.server_finished_size, self.server_finish_size)
         return {
             "mode": self.mode,
             "hct_total_ns": self.t_total_ns,
             "hct_ms": self.t_total_ns / 1_000_000 if self.t_total_ns > 0 else 0,
             "client_hello_size": self.client_hello_size,
             "server_hello_size": self.server_hello_size,
-            "client_key_exchange_size": self.client_key_exchange_size,
-            "server_finished_size": self.server_finished_size,
-            "client_finish_size": self.client_finish_size,
+            "client_key_exchange_size": client_key_exchange_size,
+            "server_finished_size": server_finished_size,
+            "client_finished_size": self.client_finished_size,
             "total_handshake_bytes": (
                 self.client_hello_size
                 + self.server_hello_size
-                + self.client_key_exchange_size
-                + self.server_finished_size
-                + self.client_finish_size
+                + client_key_exchange_size
+                + server_finished_size
+                + self.client_finished_size
             ),
             "cert_verify_ns": self.cert_verify_ns,
             "cert_verify_ms": self.cert_verify_ns / 1_000_000 if self.cert_verify_ns > 0 else 0,

@@ -186,6 +186,7 @@ class ClientHandshake:
         
         msg = _encode_client_key_exchange(ct_eph, ct_lt)
         if self.collector:
+            self.collector.client_key_exchange_size = len(msg)
             self.collector.client_finish_size = len(msg)
         self.transcript.append(msg)
         
@@ -274,6 +275,8 @@ class ClientHandshake:
             fallback=_hmac_sha256_python,
         )
         msg = _encode_finished_message('ClientFinished', mac)
+        if self.collector:
+            self.collector.client_finished_size = len(msg)
         self.transcript.append(msg)
         return msg
 
@@ -349,6 +352,7 @@ class ServerHandshake:
         """Process ClientKeyExchange and return ServerFinished."""
         cke = deserialize_message(msg_bytes)
         if self.collector:
+            self.collector.client_key_exchange_size = len(msg_bytes)
             self.collector.client_finish_size = len(msg_bytes)
         self.transcript.append(msg_bytes)
         
@@ -377,6 +381,7 @@ class ServerHandshake:
         )
         msg = _encode_finished_message('ServerFinished', mac)
         if self.collector:
+            self.collector.server_finished_size = len(msg)
             self.collector.server_finish_size = len(msg)
         self.transcript.append(msg)
         return msg
@@ -394,6 +399,8 @@ class ServerHandshake:
         ) != client_mac:
             raise ValueError("ClientFinished MAC verification failed")
             
+        if self.collector:
+            self.collector.client_finished_size = len(msg_bytes)
         self.transcript.append(msg_bytes)
         # SF is msg 4 in transcript
         t3 = compute_transcript_hash(self.transcript[:4])

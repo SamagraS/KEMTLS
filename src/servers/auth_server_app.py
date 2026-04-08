@@ -124,6 +124,10 @@ def create_auth_server_app(
     @app.route("/token", methods=["POST"])
     def token():
         payload = request.get_json(silent=True) or request.form or {}
+        collector = None
+        collector_factory = app.extensions.get("benchmark_token_collector_factory")
+        if callable(collector_factory):
+            collector = collector_factory()
         result = token_endpoint.handle_token_request(
             grant_type=payload.get("grant_type", ""),
             client_id=payload.get("client_id"),
@@ -133,7 +137,11 @@ def create_auth_server_app(
             refresh_token=payload.get("refresh_token"),
             session=_resolve_session(),
             binding_proof=extract_binding_proof_from_headers(request.headers),
+            collector=collector,
         )
+        if collector is not None and isinstance(result, dict):
+            result = dict(result)
+            result["_telemetry"] = collector.get_metrics()
         status = 400 if "error" in result else 200
         return jsonify(result), status
 

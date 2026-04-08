@@ -71,6 +71,7 @@ def main() -> None:
         "handshake_results.csv",
         "oidc_results.csv",
         "load_results.csv",
+        "artifacts_results.csv",
     ]
 
     summary_by_file: Dict[str, Dict[str, Dict[str, float]]] = {}

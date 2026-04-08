@@ -3,13 +3,12 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import os
 import statistics
 import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent.parent
@@ -17,52 +16,10 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-try:
-    import psutil  # type: ignore
-except Exception:
-    psutil = None
-
-from crypto.ml_dsa import MLDSA65
-from kemtls.certs import create_certificate
-from kemtls.handshake import ClientHandshake, ServerHandshake
-from kemtls.pdk import PDKTrustStore
+from kemtls.client import KEMTLSClient
 from telemetry.collector import KEMTLSHandshakeCollector
-from utils.encoding import base64url_decode
-from utils.helpers import get_timestamp
 
-
-def _load_keys() -> Dict[str, Any]:
-    base_dir = ROOT_DIR / "keys"
-    with (base_dir / "ca" / "ca_keys.json").open("r", encoding="utf-8") as file_handle:
-        ca_config = json.load(file_handle)
-    with (base_dir / "auth_server" / "as_config.json").open("r", encoding="utf-8") as file_handle:
-        as_config = json.load(file_handle)
-    with (base_dir / "pdk" / "pdk_manifest.json").open("r", encoding="utf-8") as file_handle:
-        pdk_manifest = json.load(file_handle)
-
-    pdk_store = PDKTrustStore()
-    for entry in pdk_manifest:
-        pdk_store.add_entry(
-            entry["key_id"],
-            entry["identity"],
-            base64url_decode(entry["ml_kem_public_key"]),
-            metadata=entry.get("metadata"),
-        )
-
-    return {
-        "ca_pk": base64url_decode(ca_config["public_key"]),
-        "server_identity": "auth-server",
-        "server_sk": base64url_decode(as_config["longterm_sk"]),
-        "server_cert": as_config["certificate"],
-        "pdk_store": pdk_store,
-        "pdk_key_id": as_config.get("pdk_key_id", "as-key-1"),
-    }
-
-
-def _rss_bytes() -> int:
-    if psutil is None:
-        return 0
-    return int(psutil.Process().memory_info().rss)
+from runtime_support import BenchmarkStack, latest_metric
 
 
 def _stats(values: List[float]) -> Dict[str, float]:
@@ -76,63 +33,78 @@ def _stats(values: List[float]) -> Dict[str, float]:
     }
 
 
-def _run_handshake(mode: str, keys: Dict[str, Any]) -> Dict[str, Any]:
-    client_collector = KEMTLSHandshakeCollector()
-    server_collector = KEMTLSHandshakeCollector()
+def _protocol_modes(protocols: Iterable[str]) -> List[str]:
+    normalized = {str(item).lower() for item in protocols}
+    modes: List[str] = []
+    if "kemtls" in normalized or "baseline" in normalized:
+        modes.append("baseline")
+    if "kemtls_pdk" in normalized or "pdk" in normalized:
+        modes.append("pdk")
+    return modes or ["baseline", "pdk"]
 
-    client = ClientHandshake(
-        expected_identity=keys["server_identity"],
-        ca_pk=keys["ca_pk"],
-        pdk_store=keys["pdk_store"],
+
+def _run_handshake(
+    *,
+    mode: str,
+    stack: BenchmarkStack,
+    port: int,
+    server_metrics_queue,
+) -> Dict[str, Any]:
+    collector = KEMTLSHandshakeCollector()
+    client = KEMTLSClient(
+        expected_identity="auth-server",
+        ca_pk=stack.keys["ca_pk"],
+        pdk_store=stack.keys["pdk_store"],
         mode=mode,
-        collector=client_collector,
+        collector=collector,
+        transport="tcp",
     )
-    server = ServerHandshake(
-        server_identity=keys["server_identity"],
-        server_lt_sk=keys["server_sk"],
-        cert=keys["server_cert"],
-        pdk_key_id=keys["pdk_key_id"],
-        collector=server_collector,
+    start_ns = time.perf_counter_ns()
+    response, session = client.request(
+        host=stack.host,
+        port=port,
+        method="GET",
+        path="/health",
+        headers={"Accept": "application/json"},
     )
+    total_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
+    client.close()
 
-    rss_start = _rss_bytes()
-    client_collector.start_hct()
-    server_collector.start_hct()
-    t_start_ns = time.perf_counter_ns()
+    server_metrics = None
+    deadline = time.time() + 1.0
+    while server_metrics is None and time.time() < deadline:
+        server_metrics = latest_metric(server_metrics_queue)
+        if server_metrics is None:
+            time.sleep(0.01)
 
-    client_hello = client.client_hello()
-    server_hello = server.process_client_hello(client_hello)
-    client_key_exchange, client_session = client.process_server_hello(server_hello)
-    server_finished = server.process_client_key_exchange(client_key_exchange)
-    final_session = client.process_server_finished(server_finished, client_session)
-    client_finished = client.client_finished()
-    server.verify_client_finished(client_finished)
-
-    t_end_ns = time.perf_counter_ns()
-    client_collector.end_hct()
-    server_collector.end_hct()
-
-    client_metrics = client_collector.get_metrics()
-    server_metrics = server_collector.get_metrics()
-
+    client_metrics = collector.get_metrics()
     return {
-        "mode": client_metrics["mode"],
-        "hct_client_ms": client_metrics["hct_ms"],
-        "hct_server_ms": server_metrics["hct_ms"],
-        "ttfb_ms": (t_end_ns - t_start_ns) / 1_000_000,
-        "bytes_total": client_metrics["total_handshake_bytes"],
-        "tcp_segments": max(1, (client_metrics["total_handshake_bytes"] + 1439) // 1440),
+        "mode": session.handshake_mode,
+        "hct_client_ms": float(client_metrics["hct_ms"]),
+        "hct_server_ms": float((server_metrics or {}).get("hct_ms", 0.0)),
+        "ttfb_ms": total_ms,
+        "bytes_client_hello": int(client_metrics["client_hello_size"]),
+        "bytes_server_hello": int(client_metrics["server_hello_size"]),
+        "bytes_client_key_exchange": int(client_metrics["client_key_exchange_size"]),
+        "bytes_server_finished": int(client_metrics["server_finished_size"]),
+        "bytes_client_finished": int(client_metrics["client_finished_size"]),
+        "bytes_total": int(client_metrics["total_handshake_bytes"]),
+        "tcp_segments": max(1, (int(client_metrics["total_handshake_bytes"]) + 1439) // 1440),
+        "cert_verify_ms": float(client_metrics["cert_verify_ms"]),
+        "pdk_lookup_ms": float(client_metrics["pdk_lookup_ms"]),
         "cpu_cycles": 0,
-        "rss_delta": _rss_bytes() - rss_start,
-        "session": final_session,
+        "rss_delta": int((server_metrics or {}).get("rss_delta", 0)),
+        "response_bytes": len(response),
     }
 
 
 def run_benchmark(config: Dict[str, Any]) -> Path:
     run_id = str(config.get("run_id") or uuid.uuid4().hex[:8])
     environment_profile = str(config.get("environment_profile", "wsl2_loopback"))
+    scenario = str((config.get("scenarios") or ["loopback"])[0])
     warmup = int(config.get("warmup", 50))
     repeat = int(config.get("repeat", 1000))
+    protocols = list(config.get("protocols", ["kemtls", "kemtls_pdk"]))
     results_dir = Path(config.get("results_dir", "benchmarks/results"))
     raw_dir = results_dir / "raw" / run_id
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -140,55 +112,75 @@ def run_benchmark(config: Dict[str, Any]) -> Path:
     csv_path = raw_dir / "handshake_results.csv"
     summary_path = raw_dir / "handshake_summary.json"
 
-    keys = _load_keys()
     print("Running handshake benchmark suite...")
     print(f"[*] run_id={run_id}")
     print(f"[*] environment_profile={environment_profile}")
+    print(f"[*] scenario={scenario}")
     print(f"[*] warmup={warmup} repeat={repeat}")
 
-    for _ in range(warmup):
-        _run_handshake("baseline", keys)
-        _run_handshake("pdk", keys)
-
     rows: List[Dict[str, Any]] = []
-    summaries: Dict[str, Dict[str, float]] = {}
+    summaries: Dict[str, Dict[str, Any]] = {}
 
-    for mode in ("baseline", "pdk"):
-        hct_client_values: List[float] = []
-        hct_server_values: List[float] = []
-        ttfb_values: List[float] = []
-        total_bytes_values: List[float] = []
+    with BenchmarkStack(transport="tcp") as stack:
+        probe_handle = stack.start_probe_server()
+        modes = _protocol_modes(protocols)
 
-        for iteration in range(repeat):
-            result = _run_handshake(mode, keys)
-            hct_client_values.append(float(result["hct_client_ms"]))
-            hct_server_values.append(float(result["hct_server_ms"]))
-            ttfb_values.append(float(result["ttfb_ms"]))
-            total_bytes_values.append(float(result["bytes_total"]))
+        for mode in modes:
+            for _ in range(warmup):
+                _run_handshake(
+                    mode=mode,
+                    stack=stack,
+                    port=probe_handle.port,
+                    server_metrics_queue=probe_handle.handshake_metrics,
+                )
 
-            rows.append(
-                {
-                    "run_id": run_id,
-                    "protocol": "KEMTLS",
-                    "scenario": mode,
-                    "hct_client_ms": round(float(result["hct_client_ms"]), 3),
-                    "hct_server_ms": round(float(result["hct_server_ms"]), 3),
-                    "ttfb_ms": round(float(result["ttfb_ms"]), 3),
-                    "bytes_total": int(result["bytes_total"]),
-                    "tcp_segments": int(result["tcp_segments"]),
-                    "cpu_cycles": int(result["cpu_cycles"]),
-                    "rss_delta": int(result["rss_delta"]),
-                    "iteration": iteration,
-                    "environment_profile": environment_profile,
-                }
-            )
+            hct_client_values: List[float] = []
+            hct_server_values: List[float] = []
+            ttfb_values: List[float] = []
+            total_bytes_values: List[float] = []
 
-        summaries[mode] = {
-            "hct_client": _stats(hct_client_values),
-            "hct_server": _stats(hct_server_values),
-            "ttfb": _stats(ttfb_values),
-            "bytes_total": _stats(total_bytes_values),
-        }
+            for iteration in range(repeat):
+                result = _run_handshake(
+                    mode=mode,
+                    stack=stack,
+                    port=probe_handle.port,
+                    server_metrics_queue=probe_handle.handshake_metrics,
+                )
+                hct_client_values.append(float(result["hct_client_ms"]))
+                hct_server_values.append(float(result["hct_server_ms"]))
+                ttfb_values.append(float(result["ttfb_ms"]))
+                total_bytes_values.append(float(result["bytes_total"]))
+                rows.append(
+                    {
+                        "run_id": run_id,
+                        "protocol": "KEMTLS",
+                        "scenario": scenario,
+                        "handshake_mode": mode,
+                        "hct_client_ms": round(float(result["hct_client_ms"]), 3),
+                        "hct_server_ms": round(float(result["hct_server_ms"]), 3),
+                        "ttfb_ms": round(float(result["ttfb_ms"]), 3),
+                        "bytes_client_hello": int(result["bytes_client_hello"]),
+                        "bytes_server_hello": int(result["bytes_server_hello"]),
+                        "bytes_client_key_exchange": int(result["bytes_client_key_exchange"]),
+                        "bytes_server_finished": int(result["bytes_server_finished"]),
+                        "bytes_client_finished": int(result["bytes_client_finished"]),
+                        "bytes_total": int(result["bytes_total"]),
+                        "tcp_segments": int(result["tcp_segments"]),
+                        "cert_verify_ms": round(float(result["cert_verify_ms"]), 3),
+                        "pdk_lookup_ms": round(float(result["pdk_lookup_ms"]), 3),
+                        "cpu_cycles": int(result["cpu_cycles"]),
+                        "rss_delta": int(result["rss_delta"]),
+                        "iteration": iteration,
+                        "environment_profile": environment_profile,
+                    }
+                )
+
+            summaries[mode] = {
+                "hct_client": _stats(hct_client_values),
+                "hct_server": _stats(hct_server_values),
+                "ttfb": _stats(ttfb_values),
+                "bytes_total": _stats(total_bytes_values),
+            }
 
     with csv_path.open("w", newline="", encoding="utf-8") as file_handle:
         writer = csv.DictWriter(
@@ -197,11 +189,19 @@ def run_benchmark(config: Dict[str, Any]) -> Path:
                 "run_id",
                 "protocol",
                 "scenario",
+                "handshake_mode",
                 "hct_client_ms",
                 "hct_server_ms",
                 "ttfb_ms",
+                "bytes_client_hello",
+                "bytes_server_hello",
+                "bytes_client_key_exchange",
+                "bytes_server_finished",
+                "bytes_client_finished",
                 "bytes_total",
                 "tcp_segments",
+                "cert_verify_ms",
+                "pdk_lookup_ms",
                 "cpu_cycles",
                 "rss_delta",
                 "iteration",
@@ -218,7 +218,7 @@ def run_benchmark(config: Dict[str, Any]) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run real handshake benchmarks")
+    parser = argparse.ArgumentParser(description="Run real socket-backed handshake benchmarks")
     parser.add_argument("--config", default="../config.json")
     parser.add_argument("--results-dir", default=None)
     parser.add_argument("--run-id", default=None)
