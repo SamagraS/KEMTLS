@@ -1,0 +1,55 @@
+services:
+  authorization:
+    build:
+      context: .
+      dockerfile: docker/services/Dockerfile
+    container_name: kemtls-authorization
+    environment:
+      SERVICE_NAME: authorization
+      SERVICE_ROLE: Post-quantum OIDC authorization server
+      SERVICE_DESC: hosts discovery, authorize, token, JWKS, and introspection endpoints over KEMTLS/QUIC.
+    command: ["/app/run-service.sh"]
+
+  resource:
+    build:
+      context: .
+      dockerfile: docker/services/Dockerfile
+    container_name: kemtls-resource
+    environment:
+      SERVICE_NAME: resource
+      SERVICE_ROLE: Protected resource server
+      SERVICE_DESC: validates session-bound access tokens and serve protected user information.
+    command: ["/app/run-service.sh"]
+
+  client:
+    build:
+      context: .
+      dockerfile: docker/services/Dockerfile
+    container_name: kemtls-client
+    environment:
+      SERVICE_NAME: client
+      SERVICE_ROLE: OIDC client and demo flow runner
+      SERVICE_DESC: performs Authorization Code Flow with Proof Key for Code Exchange over KEMTLS/QUIC.
+    command: ["/app/run-service.sh"]
+
+  benchmark:
+    build:
+      context: .
+      dockerfile: docker/services/Dockerfile
+    container_name: kemtls-benchmark
+    environment:
+      SERVICE_NAME: benchmark
+      SERVICE_ROLE: Benchmark orchestration runner
+      SERVICE_DESC: excecutes cryptographic, transport, and end-to-end benchmark suites.
+    command: ["/app/run-service.sh"]
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/services/Dockerfile
+    container_name: kemtls-frontend
+    environment:
+      SERVICE_NAME: frontend
+      SERVICE_ROLE: Demo frontend
+      SERVICE_DESC: visualizes login flow, transport mode, token state, and benchmark results.
+    command: ["/app/run-service.sh"]
