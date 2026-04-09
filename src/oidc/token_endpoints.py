@@ -83,6 +83,7 @@ class TokenEndpoint:
                 client_id=client_id,
                 refresh_token=refresh_token,
                 session=session,
+                binding_proof=binding_proof,
                 collector=collector
             )
         else:
@@ -178,6 +179,7 @@ class TokenEndpoint:
         client_id: Optional[str],
         refresh_token: Optional[str],
         session,
+        binding_proof: Optional[Dict[str, Any]] = None,
         collector: Optional[Any] = None,
     ) -> Dict[str, Any]:
         if session is None:
@@ -226,7 +228,16 @@ class TokenEndpoint:
             scope="openid",
         )
         try:
-            access_cnf_claim = build_access_token_binding_claim(session)
+            if binding_proof is not None:
+                public_key = verify_binding_proof(session, binding_proof, method="POST", path="/token")
+                if public_key is None:
+                    return {
+                        "error": "invalid_request",
+                        "error_description": "invalid binding proof signature",
+                    }
+                access_cnf_claim = build_access_token_pop_claim(public_key)
+            else:
+                access_cnf_claim = build_access_token_binding_claim(session)
         except ValueError:
             return {
                 "error": "invalid_request",

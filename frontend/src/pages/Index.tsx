@@ -29,7 +29,7 @@ type FlowState = 'idle' | 'running' | 'paused' | 'done';
 type RunMode = 'full' | 'step';
 
 const SOCKET_URL = 'http://localhost:5002';
-const BACKEND_STEP_IDS = ['hello', 'server', 'derive', 'finished', 'authorize', 'account_auth', 'consent', 'token_exchange', 'session_bind', 'resource_access'] as const;
+const BACKEND_STEP_IDS = ['hello', 'server', 'derive', 'finished', 'authorize', 'account_auth', 'consent', 'token_exchange', 'session_bind', 'resource_access', 'refresh_token'] as const;
 
 /* ──────────────────────────────────────────
    Step definitions with explanations for click-and-resume
@@ -95,6 +95,12 @@ const INITIAL_STEPS: FlowStep[] = [
     explanation: 'The client calls the protected resource endpoint with the issued access token. The resource server verifies the token binding against the active KEMTLS session before granting access.',
     status: 'idle',
   },
+  {
+    id: 'refresh_token', label: 'REFRESH TOKEN',
+    detail: 'POST /token grant_type=refresh_token',
+    explanation: 'The client submits the refresh token to the token endpoint. If valid, the server issues a fresh access token and the flow returns to RESOURCE ACCESS; if invalid, the demo resets to the first node.',
+    status: 'idle',
+  },
 ];
 
 const PLACEHOLDER_LOGS: LogEntry[] = [];
@@ -111,6 +117,7 @@ function makePlaceholderData(stepId: string): Record<string, string> {
     token_exchange: { alg: 'ML-DSA-65', id_token_size: '7.8 KB', sig_size: '3293 bytes', refresh_bound: 'true' },
     session_bind: { session_id: 'kemtls-001', binding_hash: 'ZjRhY2MxODM...', binding_alg: 'HKDF-SHA256', exporter_label: 'kemtls-session-v1' },
     resource_access: { resource: '/api/userinfo', auth: 'Bearer token', result: '200 OK – Access Granted' },
+    refresh_token: { endpoint: '/token', grant_type: 'refresh_token', refresh_token_valid: 'true', result: 'new access token issued' },
   };
   return data[stepId] || {};
 }
@@ -120,7 +127,7 @@ const PHASES = [
   { label: 'PQ TRANSPORT', color: 'var(--cyan)', stepIds: ['hello', 'server', 'derive', 'finished'] },
   { label: 'OIDC LOGIN', color: 'var(--magenta)', stepIds: ['authorize', 'account_auth', 'consent'] },
   { label: 'TOKEN SECURITY', color: 'var(--violet)', stepIds: ['token_exchange', 'session_bind'] },
-  { label: 'PLATFORM', color: 'var(--lime)', stepIds: ['resource_access'] },
+  { label: 'PLATFORM', color: 'var(--lime)', stepIds: ['resource_access', 'refresh_token'] },
 ];
 
 /* ──────────────────────────────────────────
@@ -136,6 +143,8 @@ export default function Index() {
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalWidth, setTerminalWidth] = useState(380);
   const [detailsOpen, setDetailsOpen] = useState(true);
+  const [screenShake, setScreenShake] = useState(false);
+  const [invalidRefreshVisual, setInvalidRefreshVisual] = useState(false);
   const [waitingForClick, setWaitingForClick] = useState(false);
   const [currentStepIdx, setCurrentStepIdx] = useState(-1);
   const [isBackendConnected, setIsBackendConnected] = useState(false);
@@ -189,6 +198,8 @@ export default function Index() {
 
   const resetUiState = useCallback(() => {
     dismissThreat();
+    setInvalidRefreshVisual(false);
+    setScreenShake(false);
     setFlowState('idle');
     setWaitingForClick(false);
     setCurrentStepIdx(-1);
@@ -220,6 +231,11 @@ export default function Index() {
     const status = snapshot.status || 'idle';
 
     setSteps(prev => prev.map((step, idx) => {
+      // Keep invalid refresh node red until backend reset arrives.
+      if (step.id === 'refresh_token' && step.status === 'error') {
+        return step;
+      }
+
       const isBackendStep = BACKEND_STEP_IDS.includes(step.id as (typeof BACKEND_STEP_IDS)[number]);
       if (!isBackendStep) return step;
 
@@ -305,16 +321,35 @@ export default function Index() {
       addLog(levelMap[data.level] || 'info', data.message);
     });
 
-    socket.on('step_flow_started', (data: { runId?: string }) => {
-      if (data.runId) setCurrentRunId(data.runId);
+    socket.on('step_flow_started', (data: { runId?: string; autoAdvance?: boolean; startAtStep?: string }) => {
+      if (data.runId) {
+        setCurrentRunId(data.runId);
+        currentRunIdRef.current = data.runId;
+      }
+      if (data.autoAdvance === false) {
+        setRunMode('step');
+      } else if (data.autoAdvance === true) {
+        setRunMode('full');
+      }
       dismissThreat();
       setFlowState('running');
       setElapsed(0);
       setLogs([]);
       setSelectedStep(null);
-      setCurrentStepIdx(-1);
+
+      const startIdx = data.startAtStep ? stepIndexById.current[data.startAtStep] : 0;
+      setCurrentStepIdx((startIdx || 0) - 1);
       setWaitingForClick(false);
-      setSteps(INITIAL_STEPS.map(s => ({ ...s, status: 'idle', data: undefined, durationMs: undefined })));
+      setInvalidRefreshVisual(false);
+
+      if (data.startAtStep) {
+        setSteps(prev => prev.map((s, i) => {
+          if (i < startIdx) return { ...s, status: 'done' };
+          return { ...s, status: 'idle', data: undefined, durationMs: undefined };
+        }));
+      } else {
+        setSteps(INITIAL_STEPS.map(s => ({ ...s, status: 'idle', data: undefined, durationMs: undefined })));
+      }
     });
 
     socket.on('handshake_step_start', (data: { stepId: string; runId?: string }) => {
@@ -336,12 +371,13 @@ export default function Index() {
       if (currentRunIdRef.current && data.runId && data.runId !== currentRunIdRef.current) return;
       const idx = stepIndexById.current[data.stepId];
       if (idx === undefined) return;
+      const isRefreshInvalid = data.stepId === 'refresh_token' && String(data.data?.refresh_token_valid || '').toLowerCase() === 'false';
 
       setSteps(prev => prev.map((s, i) => {
         if (i === idx) {
           return {
             ...s,
-            status: 'done',
+            status: isRefreshInvalid ? 'error' : 'done',
             data: data.data,
             durationMs: data.durationMs,
           };
@@ -352,6 +388,20 @@ export default function Index() {
       if (data.isFinal) {
         setWaitingForClick(false);
         setFlowState('done');
+      }
+    });
+
+    socket.on('refresh_token_transition', (data: { outcome: 'valid' | 'invalid'; delayMs: number; runId?: string }) => {
+      if (currentRunIdRef.current && data.runId && data.runId !== currentRunIdRef.current) return;
+      setWaitingForClick(false);
+      setFlowState('running');
+      if (data.outcome === 'invalid') {
+        setSteps(prev => prev.map(step => (step.id === 'refresh_token' ? { ...step, status: 'error' } : step)));
+        setInvalidRefreshVisual(true);
+        setScreenShake(true);
+        window.setTimeout(() => setScreenShake(false), 700);
+      } else {
+        setInvalidRefreshVisual(false);
       }
     });
 
@@ -541,7 +591,8 @@ export default function Index() {
   const activeThreatInfo = selectedStep ? THREATS.find(t => t.stepId === selectedStep) : null;
 
   return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden" style={{ background: 'var(--void)' }}>
+    <div className={`fixed inset-0 flex flex-col overflow-hidden ${screenShake ? 'screen-shake' : ''} ${invalidRefreshVisual ? 'token-invalid-mode' : ''}`} style={{ background: 'var(--void)' }}>
+      {invalidRefreshVisual && <div className="token-invalid-overlay" />}
       <CyberCursor />
       <GridBackground />
 
@@ -930,7 +981,7 @@ function VerticalFlowVisualizer({ steps, selectedStep, flowState, runMode, waiti
             ✓ FLOW COMPLETE
           </div>
           <div className="text-sm font-code" style={{ color: 'var(--text-mid)' }}>
-            All 10 protocol steps executed successfully
+            All {INITIAL_STEPS.length} protocol steps executed successfully
           </div>
           <div className="flex gap-6 mt-4 justify-center">
             <StatChip label="HANDSHAKE" value="2.1ms" color="var(--cyan)" />
@@ -965,6 +1016,7 @@ function VerticalFlowVisualizer({ steps, selectedStep, flowState, runMode, waiti
                 const globalIdx = stepIndexMap[step.id];
                 const isSelected = selectedStep === step.id;
                 const isActive = step.status === 'running';
+                const isError = step.status === 'error';
                 const isDone = step.status === 'done';
                 const isNextClickable = runMode === 'step' && waitingForClick && globalIdx === currentStepIdx + 1;
 
@@ -994,17 +1046,20 @@ function VerticalFlowVisualizer({ steps, selectedStep, flowState, runMode, waiti
                         <div className="absolute inset-0 rounded-xl transition-all duration-500" style={{
                           border: `2px solid ${
                             isNextClickable ? 'var(--magenta)'
+                            : isError ? 'var(--red)'
                             : isDone ? 'var(--lime)'
                             : isActive ? 'var(--amber)'
                             : isSelected ? phase.color
                             : 'rgba(92,168,212,0.12)'
                           }`,
                           boxShadow: isNextClickable ? '0 0 16px rgba(160,120,200,0.3), 0 0 30px rgba(160,120,200,0.1)'
+                            : isError ? '0 0 12px rgba(212,92,110,0.25), 0 0 24px rgba(212,92,110,0.08)'
                             : isDone ? '0 0 12px rgba(78,201,160,0.25), 0 0 24px rgba(78,201,160,0.08)'
                             : isActive ? '0 0 12px rgba(212,165,92,0.25), 0 0 24px rgba(212,165,92,0.08)'
                             : isSelected ? `0 0 10px color-mix(in srgb, ${phase.color} 30%, transparent)`
                             : 'none',
-                          background: isDone ? 'rgba(78,201,160,0.06)'
+                          background: isError ? 'rgba(212,92,110,0.08)'
+                            : isDone ? 'rgba(78,201,160,0.06)'
                             : isActive ? 'rgba(212,165,92,0.06)'
                             : isNextClickable ? 'rgba(160,120,200,0.06)'
                             : 'rgba(92,168,212,0.02)',
@@ -1017,12 +1072,13 @@ function VerticalFlowVisualizer({ steps, selectedStep, flowState, runMode, waiti
                         {/* Inner label */}
                         <div className="relative z-10 font-display font-bold" style={{
                           fontSize: '16px',
-                          color: isDone ? 'var(--lime)'
+                          color: isError ? 'var(--red)'
+                            : isDone ? 'var(--lime)'
                             : isActive ? 'var(--amber)'
                             : isNextClickable ? 'var(--magenta)'
                             : 'var(--text-mid)',
                         }}>
-                          {isDone ? '✓' : isActive ? '◉' : globalIdx + 1}
+                          {isError ? '✕' : isDone ? '✓' : isActive ? '◉' : globalIdx + 1}
                         </div>
 
                         {/* Shimmer on active */}
@@ -1049,7 +1105,8 @@ function VerticalFlowVisualizer({ steps, selectedStep, flowState, runMode, waiti
                       <div className="mt-2 font-display font-semibold text-center leading-tight transition-all duration-300" style={{
                         fontSize: '11px',
                         letterSpacing: '0.08em',
-                        color: isDone ? 'var(--lime)'
+                        color: isError ? 'var(--red)'
+                          : isDone ? 'var(--lime)'
                           : isActive ? 'var(--amber)'
                           : isNextClickable ? 'var(--magenta)'
                           : isSelected ? 'var(--text-glow)'

@@ -34,7 +34,7 @@ from utils.encoding import base64url_decode, base64url_encode
 from utils.serialization import deserialize_message
 
 
-STEP_ORDER = ["hello", "server", "derive", "finished", "authorize", "account_auth", "consent", "token_exchange", "session_bind", "resource_access"]
+STEP_ORDER = ["hello", "server", "derive", "finished", "authorize", "account_auth", "consent", "token_exchange", "session_bind", "resource_access", "refresh_token"]
 SIMULATION_MODE = os.environ.get("SIMULATION_MODE", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -75,6 +75,8 @@ class HandshakeSessionState:
     oidc_scope: str = "openid profile email"
     resource_http_client: Optional[KEMTLSHttpClient] = None
     resource_url: str = ""
+    refresh_loop_count: int = 0
+    max_refresh_loops: int = 1
     started_at: float = field(default_factory=time.perf_counter)
 
 
@@ -505,6 +507,59 @@ def _run_current_step(state: HandshakeSessionState) -> Dict[str, Any]:
                 "rs_binding": _render_binding(binding_id),
             }
 
+    elif step_id == "refresh_token":
+        if not state.oidc_client:
+            raise RuntimeError("OIDC client is not initialized")
+
+        previous_refresh_token = state.oidc_client.refresh_token
+        force_invalid_for_demo = state.refresh_loop_count >= state.max_refresh_loops
+        if force_invalid_for_demo:
+            invalid_response = state.oidc_client.http_client.post(
+                f"{state.oidc_issuer_url}/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": "invalid-refresh-token-demo",
+                    "client_id": state.oidc_client_id,
+                },
+            )
+            refresh_valid = bool(invalid_response.get("status") == 200)
+            refreshed = invalid_response.get("body", {}) if isinstance(invalid_response.get("body"), dict) else {}
+        else:
+            refreshed = state.oidc_client.refresh()
+            refresh_valid = bool(refreshed.get("access_token"))
+
+        if not refresh_valid:
+            data = {
+                "endpoint": "/token",
+                "grant_type": "refresh_token",
+                "refresh_token_valid": "false",
+                "verdict": "refresh denied",
+            }
+        else:
+            new_refresh_token = state.oidc_client.refresh_token
+            stale_refresh_rejected = "n/a"
+            if previous_refresh_token:
+                stale_response = state.oidc_client.http_client.post(
+                    f"{state.oidc_issuer_url}/token",
+                    data={
+                        "grant_type": "refresh_token",
+                        "refresh_token": previous_refresh_token,
+                        "client_id": state.oidc_client_id,
+                    },
+                )
+                stale_refresh_rejected = "true" if stale_response.get("status") == 400 else "false"
+
+            data = {
+                "endpoint": "/token",
+                "grant_type": "refresh_token",
+                "refresh_token_valid": "true",
+                "new_access_token": "issued" if refreshed.get("access_token") else "missing",
+                "rotated_refresh_token": "true" if new_refresh_token and new_refresh_token != previous_refresh_token else "false",
+                "stale_refresh_rejected": stale_refresh_rejected,
+                "verdict": "refresh accepted",
+            }
+            state.refresh_loop_count += 1
+
     else:
         raise ValueError(f"Unknown step id: {step_id}")
 
@@ -625,6 +680,30 @@ def _execute_and_advance(state: HandshakeSessionState, step_id: str) -> None:
         for key, value in result["data"].items():
             _emit_log(f"    {key}: {value}", "info")
 
+        if step_id == "refresh_token":
+            refresh_valid = str(result["data"].get("refresh_token_valid", "false")).lower() == "true"
+            delay_ms = 3000
+            if refresh_valid:
+                _emit_log("{REFRESH TOKEN VALID}", "success")
+                _emit_log("  Holding node 11 for 3s, then routing back to NODE 10", "info")
+            else:
+                _emit_log("{REFRESH TOKEN INVALID}", "error")
+                _emit_log("  Holding node 11 for 3s, then resetting to NODE 1", "warning")
+
+            _emit_event(
+                "refresh_token_transition",
+                {
+                    "outcome": "valid" if refresh_valid else "invalid",
+                    "delayMs": delay_ms,
+                    "timestamp": _now_ms(),
+                    "runId": state.run_id,
+                },
+            )
+            state.status = "running"
+            _emit_state_snapshot()
+            socketio.start_background_task(_complete_refresh_transition, state.run_id, refresh_valid, delay_ms)
+            return
+
         state.step_index += 1
         if state.step_index < len(STEP_ORDER):
             next_step = STEP_ORDER[state.step_index]
@@ -671,6 +750,61 @@ def _execute_and_advance(state: HandshakeSessionState, step_id: str) -> None:
         )
         _reset_active_run("stale session state cleared after step failure")
         _emit_state_snapshot()
+
+
+def _complete_refresh_transition(run_id: str, refresh_valid: bool, delay_ms: int) -> None:
+    global _active_run_id, _active_session
+    time.sleep(max(delay_ms, 0) / 1000.0)
+    state = _active_session
+    if not state or state.run_id != run_id:
+        return
+
+    if refresh_valid:
+        resource_idx = STEP_ORDER.index("resource_access")
+        state.step_index = resource_idx
+        if state.auto_advance:
+            state.status = "running"
+            _emit_state_snapshot()
+            socketio.start_background_task(_run_next_step_for_client)
+        else:
+            state.status = "paused"
+            _emit_event(
+                "step_flow_paused",
+                {
+                    "nextStepId": "resource_access",
+                    "timestamp": _now_ms(),
+                    "runId": state.run_id,
+                },
+            )
+            _emit_state_snapshot()
+        return
+
+    _emit_log("  Redirecting to OIDC Authorize since refresh token was invalid...", "warning")
+    
+    # Stay in existing KEMTLS session, but reset OIDC flow state
+    state.step_index = STEP_ORDER.index("authorize")
+    state.status = "paused"
+    state.refresh_loop_count = 0
+    state.auth_code = None
+    state.token_response = None
+    state.token_claims = None
+    if state.oidc_client:
+        state.oidc_client.access_token = None
+        state.oidc_client.refresh_token = None
+        state.oidc_client.id_token = None
+
+    # Sync frontend: keep autoAdvance as is so UI mode doesn't switch
+    _emit_event("step_flow_started", {
+        "runId": state.run_id, 
+        "mode": state.mode,
+        "transport": state.transport,
+        "autoAdvance": state.auto_advance,
+        "timestamp": _now_ms(),
+        "startAtStep": "authorize"
+    })
+    _emit_state_snapshot()
+    # Do NOT start background task: force stop at Node 5
+
 
 
 @socketio.on("connect")
